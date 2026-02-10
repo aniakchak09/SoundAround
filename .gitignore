@@ -1,15 +1,29 @@
+# --- IDE & System Files ---
+.idea/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+*.iws
+*.ipr
 .DS_Store
-/build
+Thumbs.db
+
+# --- Gradle & Build ---
+.gradle/
+build/
 /captures
 .externalNativeBuild
 .cxx
+
+# --- Local Configuration (DO NOT COMMIT) ---
+# This protects your API Keys and SDK paths
 local.properties
+secrets.properties
+
+# --- Compilation & Output ---
+*.apk
+*.aar
+*.jks
+*.keystore
+
+# --- Project Specific ---
+# If you use the Google Maps API, it might generate these
+google-services.json
