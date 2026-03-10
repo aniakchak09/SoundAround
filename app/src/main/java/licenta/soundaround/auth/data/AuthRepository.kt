@@ -7,7 +7,15 @@ import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import licenta.soundaround.auth.domain.model.VisibilityMode
 import licenta.soundaround.core.SupabaseConfig
+
+@Serializable
+private data class VisibilityDto(
+    @SerialName("privacy_mode") val visibilityMode: VisibilityMode? = VisibilityMode.PUBLIC
+)
 
 sealed interface AuthResponse {
     data object Success : AuthResponse
@@ -167,6 +175,19 @@ class AuthRepository {
         } catch (e: Exception) {
             Log.e("Auth", "Update bio failed", e)
             false
+        }
+    }
+
+    suspend fun getVisibilityMode(): VisibilityMode {
+        return try {
+            val id = client.auth.currentUserOrNull()?.id ?: return VisibilityMode.PUBLIC
+            val result = client.from("profiles").select {
+                filter { eq("id", id) }
+            }.decodeSingle<VisibilityDto>()
+            result.visibilityMode ?: VisibilityMode.PUBLIC
+        } catch (e: Exception) {
+            Log.e("Auth", "getVisibilityMode failed, defaulting to PUBLIC: ${e.message}")
+            VisibilityMode.PUBLIC
         }
     }
 

@@ -1,0 +1,267 @@
+﻿Cum integrez spotify??
+A. Spotify Web API (REST, over HTTP)
+Ce poți face cu el:
+* Ce ascultă utilizatorul acum
+
+   * Endpoint: “Get Currently Playing Track” – îți dă piesa curentă, timestamp, progress, context etc. Spotify for Developers
+
+   * Ai nevoie de scope: user-read-currently-playing / user-read-playback-state. Spotify for Developers
+
+      * Top artiști / piese ale utilizatorului
+
+         * Endpoint: “Get User's Top Artists and Tracks” – /me/top/{type}, unde type = artists sau tracks. Spotify for Developers+1
+
+         * Scope: user-top-read. Spotify for Developers
+
+            * Alte chestii utile pt tine
+
+               * Recent played: user-read-recently-played (poți face alte statistici). Spotify for Developers
+
+               * Metadata de catalog (artist, track, imagini etc.) prin diverse endpointuri Web API. Spotify for Developers+2Spotify for Developers+2
+
+Cum îl folosești pe Android:
+                  * Faci login OAuth2 Authorization Code cu PKCE (flow-ul recomandat pe mobile, fără să ții client secretul pe device). Spotify for Developers
+
+                  * Primești access token + refresh token → de aici poți apela Web API:
+
+                     * fie direct din aplicația Android (HTTP calls cu OkHttp/Retrofit),
+
+                     * fie printr-un backend propriu (recomandat pentru licență, îți dă și material de arhitectură / securitate în documentație).
+
+Avantaje pentru proiectul tău:
+                        * Super simplu de folosit: e doar un API REST.
+
+                        * Exact ce îți trebuie pentru:
+
+                           * “ce ascultă acum” (pollezi endpointul o dată la N secunde),
+
+                           * top artiști / top piese (pentru profile, compatibilitate, badge-uri).
+
+                              * Portabil: dacă mâine vrei și versiune web, tot Web API vei folosi.
+
+                              * Documentație și exemple la greu + tutoriale actuale. Medium+1
+
+Limitări / chestii de știut:
+                                 * Pentru control playback (seek, play, pause etc.) multe endpointuri merg doar pentru Premium. Spotify for Developers
+
+                                    * Tu probabil nu ai nevoie să controlezi muzica, doar să o citești.
+
+                                       * În 2024 Spotify a început să fie mai restrictiv cu unele date de catalog pentru aplicațiile noi, deci trebuie să fii atent la ce îți permite “use case”-ul tău și termenii de utilizare (în special dacă folosești imagini, playlisturi editoriale etc.). The Verge
+
+                                       * Nu e “real-time la milisecundă” – tu vei face polling (ex. la 5–10 secunde) pentru harta ta, ceea ce e oricum ok pentru use-case.
+
+
+
+
+2. Ce îți recomand concret
+Pentru licența ta (Android app, harta cu utilizatori + ce ascultă + stats):
+Folosește Spotify Web API ca bază
+                                          1. Autentificare
+
+                                             * Implementare Authorization Code Flow with PKCE în aplicația Android → user-ul se loghează cu contul Spotify → îți dă scopurile:
+
+                                                * user-read-currently-playing
+
+                                                * user-read-playback-state
+
+                                                * user-top-read
+
+                                                * eventual user-read-recently-played pentru stats extra. Spotify for Developers
+
+                                                   2. “Ce ascultă acum”
+
+                                                      * Periodic (ex. la 5–10 secunde, sau doar când user-ul deschide/activează harta):
+
+                                                         * chemi GET /me/player/currently-playing
+ → primești track + artist + album art + progress_ms etc. Spotify for Developers+2Spotify for Developers+2
+
+                                                            * Trimiți la backend:
+
+                                                               * userID-ul tău intern,
+
+                                                               * ce ascultă (track ID, artist ID),
+
+                                                               * poziția pe hartă (dacă și-a dat consent pt locație),
+
+                                                               * timestamp.
+
+                                                                  * Backend-ul folosește asta ca să populeze harta + filtrele de compatibilitate muzicală (exact ce ai în idei).
+
+                                                                     3. Top artiști / top piese per utilizator
+
+                                                                        * GET /me/top/artists și GET /me/top/tracks
+ cu parametrul time_range (short_term, medium_term, long_term) → faci profilul muzical al user-ului. Spotify for Developers+2spotifyweb.apidog.io+2
+
+                                                                        * Poți folosi datele astea pentru:
+
+                                                                           * compatibilitate între utilizatori,
+
+                                                                           * badge-uri / gamificare (“Ai descoperit X artiști noi luna asta” etc.),
+
+                                                                           * feed personalizat.
+
+                                                                              4. Arhitectură frumoasă de licență
+
+                                                                                 * Client Android în Kotlin (conform ce scriai în idei).
+
+                                                                                 * Un backend (ex. Spring Boot / Node / Firebase Cloud Functions) care:
+
+                                                                                    * ține userii, prieteniile, mesajele,
+
+                                                                                    * stochează snapshot-urile “ce ascultă acum”,
+
+                                                                                    * face pre-procesare pentru stats / matching.
+
+                                                                                       * Layer de “SpotifyService” care îți ambalează apelurile la Web API → poți în viitor să “plugi” și alt provider (ex. YouTube Music, dacă la un moment dat găsești un API decent).
+
+
+
+
+
+
+Am decis sa merg mai departe cu last fm pentru ca spotify este momentan pus pe hold pentru developeri si asta am gasit sa fie cel mai versatil
+
+
+
+
+
+
+
+
+
+
+                                                                                       1. Componente:
+                                                                                       1. UI: harta, profil, chats, settings
+                                                                                       2. Map API
+                                                                                       3. Presence publisher (ce i asta?)
+                                                                                       4. Music provider connector (folosesc last.fm aici)
+                                                                                       5. Realtime subscriptions (pentru harta, chat, notificari)
+                                                                                       2. Firebase pentru auth, store si realtime db (sau ttl, vedem)
+                                                                                       3. last.fm pentru chestii legate de ce asc live, top tracks sau artisti, recomandari
+                                                                                       4. Matching service poate
+
+
+
+
+
+
+Componente:
+                                                                                       * Core (pentru chestii comune)
+                                                                                       * Auth
+                                                                                       * Map
+                                                                                       * Music
+                                                                                       * Social
+  
+
+                                                                                       1. Data modeling:
+                                                                                       1. User:
+                                                                                       1. Identification: ID, name, profile pic (?)
+                                                                                       2. <Location>: lat, long, lastSeen timestamp
+                                                                                       3. Privacy: public, friends only, private
+                                                                                       4. Music snapshot: playingNow, title, artist, album, preview
+                                                                                       5. (Compatibility: top genres, top tracks, top artists (match score))
+                                                                                       2. Track:
+                                                                                       1. Title
+                                                                                       2. Artist
+                                                                                       3. Album
+                                                                                       4. isNowPlaying
+                                                                                       5. previewUrl
+                                                                                       3. Artist:
+                                                                                       1. Name
+                                                                                       2. Listeners? 
+                                                                                       4. Friendship (connection between users):
+                                                                                       1. UserID
+                                                                                       2. FriendID
+                                                                                       3. Status (pending, accepted,blocked)
+                                                                                       4. Match score?
+                                                                                       5. Location:
+                                                                                       1. UserID
+                                                                                       2. Lat
+                                                                                       3. Long
+                                                                                       4. Last seen timestamp
+                                                                                       6. What else…
+                                                                                       2. Music provider interface:
+                                                                                       1. getPlayingNow(userID): returns current track
+                                                                                       2. ferRecentTracks(userID): history and matching
+                                                                                       3. getPreviewUrl(trackID): for iTunes preview
+                                                                                       4. What else…
+                                                                                       3. Map and interaction logic:
+                                                                                       1. Discovery radius (500m - 5km?)
+                                                                                       2. Filtering
+                                                                                       3. Zoom behavior
+                                                                                       4. Social:
+                                                                                       1. “Ping”: temporary chat
+                                                                                       2. Friend request
+                                                                                       3. Matching?
+                                                                                       4. Chat itself
+                                                                                       5. Technologies
+                                                                                       1. Front: kotlin compose / figma?
+                                                                                       2. Map engine: maplibre, map tiler, open street map
+                                                                                       3. Backend: Supabase (parola normala)
+                                                                                       4. Auth: auth din supabase
+                                                                                       5. DB: postgre din supabase
+                                                                                       6. Storage: tot din supabase
+                                                                                       6. Logic:
+                                                                                       1. Now playing sync:
+                                                                                       1. When does it change? Pooling every n seconds or just when the song changes
+                                                                                       2. If the user is on “invisible” mode, the data is fetched to their own UI, but never sent to the backend
+                                                                                       3. Uses data: track, artist, …, timestamp (if user not live)
+                                                                                       2. Matching algo:
+                                                                                       1. Simple: count common artist + tracks
+                                                                                       2. Advanced: assign weights, niche brings a higher score than mainstream
+                                                                                       3. Map interaction:
+                                                                                       1. Discovery: tap on user icon on the map
+                                                                                       2. Preview: user can preview what other users are listening
+                                                                                       3. Ping: start a temporary chat
+                                                                                       4. Expiration: chat expires after 24h if users are not friends
+                                                                                       7. Table definitions:
+                                                                                       1. Users:
+                                                                                       1. Id (PK)
+                                                                                       2. Username (unique)
+                                                                                       3. Email
+                                                                                       4. Lastfm_username
+                                                                                       5. avatar_url
+                                                                                       6. Privacy_mode
+                                                                                       7. Created_at
+                                                                                       2. Location:
+                                                                                       1. User_id
+                                                                                       2. Track_name
+                                                                                       3. Artist_name
+                                                                                       4. Album_art
+                                                                                       5. Itunes_preview_url
+                                                                                       6. Is_playing
+                                                                                       7. Synced_at
+                                                                                       3. Friendship:
+                                                                                       1. User_id
+                                                                                       2. Friend_id
+                                                                                       3. Status
+                                                                                       4. match _score
+                                                                                       8. Package structure (each with data, domain, presentation):
+                                                                                       1. Core (for common features)
+                                                                                       2. Auth
+                                                                                       3. Map
+                                                                                       4. Music
+                                                                                       5. Social 
+                                                                                       9. Roadmap
+                                                                                       1. Identity and music link
+                                                                                       1. Set up supabase project (auth and db)
+                                                                                       2. Implement last.fm auth (one field to link last.fm username to supabase user id)
+                                                                                       2. Sync engine
+                                                                                       1. Build poolling service that calls last.fm every n seconds while app is in foreground
+                                                                                       2. Implement presence publisher (update current / last track and location in db)
+                                                                                       3. Implement privacy modes !!! if invisible is enabled, location is not sent to the db !!! it will appear where it was last seen
+                                                                                       3. Map integration
+                                                                                       1. Set up map libre
+                                                                                       2. Fetch “nearby users” from supabase and display them (how will I mock other users?)
+                                                                                       3. Implement zoom interaction (clustering)
+                                                                                       4. iTunes preview
+                                                                                       1. Fetch the preview for the specific track from iTunes API
+                                                                                       2. Create the UI for the preview
+                                                                                       5. Pings and chat
+                                                                                       1. Implement the temporary chat (marked by an expires at timestamp in the conversations table)
+                                                                                       2. Add friend requests -> persistent chats
+                                                                                       3. Matching algo
+                                                                                       6. Prep for demo
+                                                                                       1. Create the users in a csv first
+                                                                                       2. Create mock users db
+                                                                                       3. Simulation service and flow (accept request in db)

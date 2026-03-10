@@ -98,6 +98,9 @@ dependencies {
     // Coil for loading Album Art images
     implementation("io.coil-kt:coil-compose:2.4.0")
 
+    // Material Icons Extended (for Visibility / VisibilityOff icons)
+    implementation("androidx.compose.material:material-icons-extended")
+
     // Kotlin Serialization for JSON parsing (if needed)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")
 

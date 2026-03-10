@@ -4,12 +4,15 @@ import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -48,6 +51,7 @@ fun ManageProfileScreen(
             bio = profile?.bio ?: ""
             lastFmUsername = profile?.lastFmUsername ?: ""
         }
+        Log.d("ManageProfileScreen", "Session: $session")
     }
 
     Column(
@@ -58,41 +62,54 @@ fun ManageProfileScreen(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
+        Text("Edit Profile", style = MaterialTheme.typography.headlineLarge)
+        Text("Update your information", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+
+        Spacer(modifier = Modifier.height(32.dp))
+
         OutlinedTextField(
             value = username,
             onValueChange = { username = it },
             label = { Text("Username") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         OutlinedTextField(
             value = bio,
             onValueChange = { bio = it },
-            label = { Text("Brief description") },
+            label = { Text("Bio") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
         OutlinedTextField(
             value = lastFmUsername,
             onValueChange = { lastFmUsername = it },
             label = { Text("Last.fm username") },
+            singleLine = true,
             modifier = Modifier.fillMaxWidth()
         )
+
+        Spacer(modifier = Modifier.height(24.dp))
 
         Button(
             onClick = {
                 scope.launch {
                     var allSuccessful = true
 
-                    // LOGIC: Only update Name if it's NOT empty
                     if (username.isNotBlank()) {
                         val res = authRepo.updateUsername(username)
                         if (!res) allSuccessful = false
                     }
 
-                    // LOGIC: Bio saves no matter what (can be cleared)
                     val bioRes = authRepo.updateBio(bio)
                     if (!bioRes) allSuccessful = false
 
-                    // LOGIC: Only update Last.fm if not blank
                     if (lastFmUsername.isNotBlank()) {
                         val lastFmRes = authRepo.updateLastFm(lastFmUsername)
                         if (!lastFmRes) allSuccessful = false
@@ -103,7 +120,8 @@ fun ManageProfileScreen(
                         onSuccess()
                     }
                 }
-            }
+            },
+            modifier = Modifier.fillMaxWidth()
         ) {
             Text("Save Changes")
         }

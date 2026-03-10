@@ -21,6 +21,7 @@ import licenta.soundaround.auth.data.AuthRepository
 import licenta.soundaround.auth.presentation.LoginScreen
 import licenta.soundaround.auth.presentation.ManageProfileScreen
 import licenta.soundaround.auth.presentation.SignUpScreen
+import licenta.soundaround.presence.data.PresenceRepository
 
 object AppContainer {
     val authRepository: AuthRepository by lazy {
@@ -29,6 +30,10 @@ object AppContainer {
 
     val trackRepository: MusicRepositoryImpl by lazy {
         MusicRepositoryImpl(RetrofitClient.lastFmService)
+    }
+
+    val presenceRepository: PresenceRepository by lazy {
+        PresenceRepository()
     }
 }
 
@@ -57,7 +62,8 @@ fun AppNav() {
             composable(Screen.SignUp.route) {
                 SignUpScreen(
                     authRepo = authRepo,
-                    onSignUpSuccess = { navController.navigate(Screen.LastFmTest.route) }
+                    onSignUpSuccess = { navController.navigate(Screen.LastFmTest.route) },
+                    onNavigateToLogin = { navController.popBackStack() }
                 )
             }
 
@@ -65,7 +71,7 @@ fun AppNav() {
                 val viewModel: LastFmViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return LastFmViewModel(AppContainer.trackRepository, authRepo) as T
+                            return LastFmViewModel(AppContainer.trackRepository, authRepo, AppContainer.presenceRepository) as T
                         }
                     }
                 )

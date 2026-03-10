@@ -1,18 +1,20 @@
 package licenta.soundaround.music.data
 
-import android.media.Image
 import com.google.gson.annotations.SerializedName
-import java.util.jar.Attributes
 
-// Data class representing a track from the Last.fm API response
 data class LastFmTrackDto(
     val name: String,
     val artist: LastFmArtistDto,
+    val album: LastFmAlbumDto,
     val image: List<LastFmImageDto>,
     @SerializedName("@attr") val attributes: LastFmAttributesDto?
 )
 
 data class LastFmArtistDto(
+    @SerializedName("#text") val name: String
+)
+
+data class LastFmAlbumDto(
     @SerializedName("#text") val name: String
 )
 

@@ -9,12 +9,15 @@ import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import licenta.soundaround.auth.data.AuthRepository
-import licenta.soundaround.music.data.MusicRepositoryImpl
+import licenta.soundaround.auth.domain.model.VisibilityMode
 import licenta.soundaround.music.domain.model.Track
+import licenta.soundaround.music.domain.repository.MusicRepository
+import licenta.soundaround.presence.data.PresenceRepository
 
 class LastFmViewModel(
-    private val repository: MusicRepositoryImpl,
-    private val authRepo: AuthRepository
+    private val repository: MusicRepository,
+    private val authRepo: AuthRepository,
+    private val presenceRepository: PresenceRepository
 ) : ViewModel() {
 
     var trackInfo by mutableStateOf<Track?>(null)
@@ -30,43 +33,46 @@ class LastFmViewModel(
 
     private fun startPolling() {
         viewModelScope.launch {
-            // Read username once
-            val username = try {
-                authRepo.getProfile()?.lastFmUsername
+            val profile = try {
+                authRepo.getProfile()
             } catch (e: Exception) {
                 Log.e("LastFmViewModel", "Failed to load profile: ${e.message}")
                 null
             }
 
+            val username = profile?.lastFmUsername
             if (username.isNullOrBlank()) {
                 errorMessage = "No Last.fm username set. Please update your profile."
                 return@launch
             }
 
-            // First fetch — show loading indicator only on initial load
+            val visibility = authRepo.getVisibilityMode()
+
             isLoading = true
-            fetchAndUpdate(username)
+            fetchAndUpdate(username, visibility)
             isLoading = false
 
-            // Periodic polling — never wipes the displayed track on failure
             while (true) {
                 delay(20_000L)
-                fetchAndUpdate(username)
+                fetchAndUpdate(username, visibility)
             }
         }
     }
 
-    private suspend fun fetchAndUpdate(username: String) {
+    private suspend fun fetchAndUpdate(username: String, visibility: VisibilityMode) {
         try {
             val result = repository.getCurrentTrack(username)
             if (result != null) {
                 trackInfo = result
                 errorMessage = null
+
+                // Publish presence only if user is not invisible
+                if (visibility != VisibilityMode.INVISIBLE) {
+                    presenceRepository.publish(result)
+                }
             }
-            // If result is null (nothing returned), keep the last known track visible
         } catch (e: Exception) {
             Log.e("LastFmViewModel", "Error fetching track: ${e.message}")
-            // Keep last known track; just surface a subtle error
             errorMessage = "Could not refresh. Showing last known track."
         }
     }
