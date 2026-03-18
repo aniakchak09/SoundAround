@@ -1,5 +1,6 @@
 package licenta.soundaround.core
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -7,34 +8,39 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
-import licenta.soundaround.music.presentation.LastFmViewModel
-import licenta.soundaround.music.RetrofitClient
-import licenta.soundaround.music.data.MusicRepositoryImpl
-import licenta.soundaround.music.presentation.LastFmScreen
 import licenta.soundaround.auth.data.AuthRepository
 import licenta.soundaround.auth.presentation.LoginScreen
 import licenta.soundaround.auth.presentation.ManageProfileScreen
 import licenta.soundaround.auth.presentation.SignUpScreen
+import licenta.soundaround.map.data.MapRepository
+import licenta.soundaround.music.RetrofitClient
+import licenta.soundaround.music.RetrofitItunesClient
+import licenta.soundaround.music.data.MusicRepositoryImpl
 import licenta.soundaround.presence.data.PresenceRepository
+import licenta.soundaround.social.data.SocialRepository
 
 object AppContainer {
-    val authRepository: AuthRepository by lazy {
-        AuthRepository()
+    lateinit var locationProvider: LocationProvider
+        private set
+
+    fun init(context: Context) {
+        locationProvider = LocationProvider(context)
     }
+
+    val authRepository: AuthRepository by lazy { AuthRepository() }
 
     val trackRepository: MusicRepositoryImpl by lazy {
-        MusicRepositoryImpl(RetrofitClient.lastFmService)
+        MusicRepositoryImpl(RetrofitClient.lastFmService, RetrofitItunesClient.itunesService)
     }
 
-    val presenceRepository: PresenceRepository by lazy {
-        PresenceRepository()
-    }
+    val presenceRepository: PresenceRepository by lazy { PresenceRepository() }
+
+    val mapRepository: MapRepository by lazy { MapRepository() }
+
+    val socialRepository: SocialRepository by lazy { SocialRepository() }
 }
 
 @Composable
@@ -45,7 +51,7 @@ fun AppNav() {
 
     LaunchedEffect(Unit) {
         val isLoggedIn = authRepo.isUserLoggedIn()
-        startRoute = if (isLoggedIn) Screen.LastFmTest.route else Screen.Login.route
+        startRoute = if (isLoggedIn) Screen.Main.route else Screen.Login.route
     }
 
     startRoute?.let { destination ->
@@ -54,7 +60,7 @@ fun AppNav() {
             composable(Screen.Login.route) {
                 LoginScreen(
                     authRepo = authRepo,
-                    onLoginSuccess = { navController.navigate(Screen.LastFmTest.route) },
+                    onLoginSuccess = { navController.navigate(Screen.Main.route) },
                     onNavigateToSignUp = { navController.navigate(Screen.SignUp.route) }
                 )
             }
@@ -62,23 +68,18 @@ fun AppNav() {
             composable(Screen.SignUp.route) {
                 SignUpScreen(
                     authRepo = authRepo,
-                    onSignUpSuccess = { navController.navigate(Screen.LastFmTest.route) },
+                    onSignUpSuccess = { navController.navigate(Screen.Main.route) },
                     onNavigateToLogin = { navController.popBackStack() }
                 )
             }
 
-            composable(Screen.LastFmTest.route) {
-                val viewModel: LastFmViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return LastFmViewModel(AppContainer.trackRepository, authRepo, AppContainer.presenceRepository) as T
-                        }
-                    }
-                )
-
-                LastFmScreen(
-                    viewModel = viewModel,
+            composable(Screen.Main.route) {
+                MainScreen(
                     authRepo = authRepo,
+                    trackRepository = AppContainer.trackRepository,
+                    presenceRepository = AppContainer.presenceRepository,
+                    mapRepository = AppContainer.mapRepository,
+                    socialRepository = AppContainer.socialRepository,
                     onNavToProfile = { navController.navigate(Screen.Profile.route) },
                     onSignOut = {
                         navController.navigate(Screen.Login.route) {
@@ -91,7 +92,7 @@ fun AppNav() {
             composable(Screen.Profile.route) {
                 ManageProfileScreen(
                     authRepo = authRepo,
-                    onSuccess = { navController.navigate(Screen.LastFmTest.route) }
+                    onSuccess = { navController.popBackStack() }
                 )
             }
         }

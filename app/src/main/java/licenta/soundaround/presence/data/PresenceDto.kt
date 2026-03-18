@@ -10,5 +10,8 @@ data class PresenceDto(
     @SerialName("artist_name") val artistName: String,
     @SerialName("album_art") val albumArt: String,
     @SerialName("is_playing") val isPlaying: Boolean,
-    @SerialName("synced_at") val syncedAt: String
+    @SerialName("synced_at") val syncedAt: String,
+    val lat: Double? = null,
+    val lng: Double? = null,
+    @SerialName("last_seen_at") val lastSeenAt: String? = null
 )

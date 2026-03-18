@@ -16,9 +16,10 @@ class PresenceRepository {
         timeZone = TimeZone.getTimeZone("UTC")
     }
 
-    suspend fun publish(track: Track): Boolean {
+    suspend fun publish(track: Track, lat: Double? = null, lng: Double? = null): Boolean {
         return try {
             val userId = client.auth.currentUserOrNull()?.id ?: return false
+            val now = isoFormat.format(Date())
             client.from("locations").upsert(
                 PresenceDto(
                     userId = userId,
@@ -26,12 +27,15 @@ class PresenceRepository {
                     artistName = track.artist,
                     albumArt = track.imageUrl,
                     isPlaying = track.isNowPlaying,
-                    syncedAt = isoFormat.format(Date())
+                    syncedAt = now,
+                    lat = lat,
+                    lng = lng,
+                    lastSeenAt = if (lat != null && lng != null) now else null
                 )
             ) {
                 onConflict = "user_id"
             }
-            Log.d("PresenceRepository", "Published: ${track.title} by ${track.artist}")
+            Log.d("PresenceRepository", "Published: ${track.title} by ${track.artist} @ $lat,$lng")
             true
         } catch (e: Exception) {
             Log.e("PresenceRepository", "Publish failed: ${e.message}")

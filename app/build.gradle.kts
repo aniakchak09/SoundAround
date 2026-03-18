@@ -39,12 +39,14 @@ android {
             buildConfigField("String", "LASTFM_API_KEY", "\"${localProperties.getProperty("LASTFM_API_KEY")}\"")
             buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL")}\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY")}\"")
+            buildConfigField("String", "MAPTILER_API_KEY", "\"${localProperties.getProperty("MAPTILER_API_KEY")}\"")
         }
 
         debug {
             buildConfigField("String", "LASTFM_API_KEY", "\"${localProperties.getProperty("LASTFM_API_KEY")}\"")
             buildConfigField("String", "SUPABASE_URL", "\"${localProperties.getProperty("SUPABASE_URL")}\"")
             buildConfigField("String", "SUPABASE_ANON_KEY", "\"${localProperties.getProperty("SUPABASE_ANON_KEY")}\"")
+            buildConfigField("String", "MAPTILER_API_KEY", "\"${localProperties.getProperty("MAPTILER_API_KEY")}\"")
         }
     }
     compileOptions {
@@ -100,6 +102,12 @@ dependencies {
 
     // Material Icons Extended (for Visibility / VisibilityOff icons)
     implementation("androidx.compose.material:material-icons-extended")
+
+    // MapLibre for the map
+    implementation("org.maplibre.gl:android-sdk:11.0.1")
+
+    // Google Play Services Location (GPS)
+    implementation("com.google.android.gms:play-services-location:21.3.0")
 
     // Kotlin Serialization for JSON parsing (if needed)
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.6.3")

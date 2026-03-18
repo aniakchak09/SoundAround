@@ -11,6 +11,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import licenta.soundaround.auth.domain.model.VisibilityMode
 import licenta.soundaround.core.SupabaseConfig
+import licenta.soundaround.core.toUserMessage
 
 @Serializable
 private data class VisibilityDto(
@@ -60,7 +61,7 @@ class AuthRepository {
             emit(AuthResponse.Error(checkSignUpErrors(e)))
         } catch (e: Exception) {
             Log.d("AuthRepository", "Sign-up failed for $email: ${e.message}")
-            emit(AuthResponse.Error(e.message ?: "Unknown error"))
+            emit(AuthResponse.Error(e.toUserMessage()))
         }
     }
 
@@ -70,7 +71,7 @@ class AuthRepository {
             "Password should be at least 6 characters." -> "Password must be at least 6 characters long."
             "Password should contain at least one character of each: abcdefghijklmnopqrstuvwxyz, ABCDEFGHIJKLMNOPQRSTUVWXYZ, 0123456789, !@#\$%^&*()_+-=[]{};':\"|<>?,./`~." -> "Password must include uppercase, lowercase, number, and special character."
             "Unable to validate email address: invalid format" -> "Invalid email format. Please enter a valid email."
-            else -> e.message ?: "Registration failed"
+            else -> e.toUserMessage()
         }
     }
 
@@ -85,13 +86,13 @@ class AuthRepository {
         } catch (e: RestException) {
             val message = when (e.message) {
                 "Invalid login credentials" -> "Invalid email or password. Please try again."
-                else -> e.message ?: "Login failed"
+                else -> e.toUserMessage()
             }
             Log.d("AuthRepository", "Sign-in failed for $email: ${e.message}, status: ${e.statusCode}")
             emit(AuthResponse.Error(message))
         } catch (e: Exception) {
             Log.d("AuthRepository", "Sign-in failed for $email: ${e.message}")
-            emit(AuthResponse.Error(e.message ?: "Unknown error"))
+            emit(AuthResponse.Error(e.toUserMessage()))
         }
     }
 
