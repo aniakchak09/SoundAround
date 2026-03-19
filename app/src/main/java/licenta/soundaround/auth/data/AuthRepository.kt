@@ -5,6 +5,7 @@ import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.auth.providers.builtin.Email
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
+import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.SerialName
@@ -124,6 +125,42 @@ class AuthRepository {
         }
     }
 
+    suspend fun resetPassword(email: String): AuthResponse {
+        return try {
+            client.auth.resetPasswordForEmail(email)
+            AuthResponse.Success
+        } catch (e: RestException) {
+            AuthResponse.Error(checkSignUpErrors(e))
+        } catch (e: Exception) {
+            AuthResponse.Error(e.toUserMessage())
+        }
+    }
+
+    suspend fun uploadAvatar(imageBytes: ByteArray): String? {
+        return try {
+            val id = client.auth.currentUserOrNull()?.id ?: return null
+            val path = "$id/avatar.jpg"
+            client.storage.from("avatars").upload(path, imageBytes) { upsert = true }
+            client.storage.from("avatars").publicUrl(path)
+        } catch (e: Exception) {
+            Log.e("Auth", "Avatar upload failed: ${e.message}")
+            null
+        }
+    }
+
+    suspend fun updateAvatarUrl(url: String): Boolean {
+        return try {
+            val id = client.auth.currentUserOrNull()?.id ?: return false
+            client.from("profiles").update({ set("avatar_url", url) }) {
+                filter { eq("id", id) }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("Auth", "Update avatar url failed: ${e.message}")
+            false
+        }
+    }
+
     suspend fun signOut() {
         try {
             client.auth.signOut()
@@ -156,7 +193,7 @@ class AuthRepository {
                     filter {
                         eq("id", id)
                     }
-                }.decodeSingle<ProfileDto>()
+                }.decodeSingleOrNull<ProfileDto>()
             } else {
                 Log.e("Auth", "No user logged in to fetch profile")
                 null

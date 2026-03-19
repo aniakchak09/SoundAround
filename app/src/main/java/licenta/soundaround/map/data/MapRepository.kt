@@ -17,6 +17,12 @@ private data class PrivacyProfileDto(
 )
 
 @Serializable
+private data class UserProfileDetailsDto(
+    val bio: String? = null,
+    @SerialName("lastfm_username") val lastFmUsername: String? = null
+)
+
+@Serializable
 private data class FriendIdDto(
     @SerialName("user_id") val userId: String = "",
     @SerialName("friend_id") val friendId: String = ""
@@ -78,6 +84,22 @@ class MapRepository {
             (asSender + asReceiver).toSet()
         } catch (e: Exception) {
             emptySet()
+        }
+    }
+
+    suspend fun getUserProfileDetails(userId: String): Pair<String?, String?> {
+        return try {
+            val dto = client.from("profiles")
+                .select(Columns.raw("bio,lastfm_username")) {
+                    filter { eq("id", userId) }
+                }
+                .decodeSingleOrNull<UserProfileDetailsDto>()
+            Pair(
+                dto?.bio?.takeIf { it.isNotBlank() },
+                dto?.lastFmUsername?.takeIf { it.isNotBlank() }
+            )
+        } catch (e: Exception) {
+            Pair(null, null)
         }
     }
 

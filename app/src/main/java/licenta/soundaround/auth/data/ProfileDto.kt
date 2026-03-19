@@ -8,5 +8,6 @@ data class ProfileDto(
     val id: String,
     val bio: String? = null,
     val username: String = "",
-    @SerialName("lastfm_username") val lastFmUsername: String? = null
+    @SerialName("lastfm_username") val lastFmUsername: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null
 )

@@ -1,46 +1,33 @@
 package licenta.soundaround.auth.presentation
 
+import android.net.Uri
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.imePadding
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.Icon
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Text
-import licenta.soundaround.auth.domain.model.VisibilityMode
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import coil.compose.AsyncImage
 import kotlinx.coroutines.launch
 import licenta.soundaround.auth.data.AuthRepository
+import licenta.soundaround.auth.domain.model.VisibilityMode
 
 @Composable
 fun ManageProfileScreen(
@@ -51,8 +38,33 @@ fun ManageProfileScreen(
     var bio by rememberSaveable { mutableStateOf("") }
     var lastFmUsername by rememberSaveable { mutableStateOf("") }
     var visibilityMode by rememberSaveable { mutableStateOf(VisibilityMode.PUBLIC) }
+    var avatarUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var isUploadingAvatar by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
+
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri: Uri? ->
+        uri ?: return@rememberLauncherForActivityResult
+        scope.launch {
+            isUploadingAvatar = true
+            try {
+                val bytes = context.contentResolver.openInputStream(uri)?.readBytes()
+                if (bytes != null) {
+                    val url = authRepo.uploadAvatar(bytes)
+                    if (url != null) {
+                        authRepo.updateAvatarUrl(url)
+                        avatarUrl = url
+                        Toast.makeText(context, "Profile picture updated!", Toast.LENGTH_SHORT).show()
+                    } else {
+                        Toast.makeText(context, "Upload failed. Check your connection.", Toast.LENGTH_SHORT).show()
+                    }
+                }
+            } catch (e: Exception) {
+                Toast.makeText(context, "Could not read image.", Toast.LENGTH_SHORT).show()
+            }
+            isUploadingAvatar = false
+        }
+    }
 
     LaunchedEffect(Unit) {
         val session = authRepo.getCurrentSession()
@@ -62,47 +74,73 @@ fun ManageProfileScreen(
             username = profile?.username ?: ""
             bio = profile?.bio ?: ""
             lastFmUsername = profile?.lastFmUsername ?: ""
+            avatarUrl = profile?.avatarUrl
             visibilityMode = authRepo.getVisibilityMode()
         }
-        Log.d("ManageProfileScreen", "Session: $session")
     }
 
-    Column(
+    Box(
         modifier = Modifier
             .fillMaxSize()
             .imePadding()
-            .verticalScroll(rememberScrollState())
-            .padding(horizontal = 32.dp, vertical = 32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally
+            .verticalScroll(rememberScrollState()),
+        contentAlignment = Alignment.Center
     ) {
-        Box(
+        Column(
             modifier = Modifier
-                .size(72.dp)
-                .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
-            contentAlignment = Alignment.Center
+                .fillMaxWidth()
+                .padding(horizontal = 32.dp, vertical = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
         ) {
-            Icon(
-                imageVector = Icons.Filled.Person,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(40.dp)
-            )
+        // Avatar
+        Box(contentAlignment = Alignment.BottomEnd) {
+            if (avatarUrl != null) {
+                AsyncImage(
+                    model = avatarUrl,
+                    contentDescription = "Profile picture",
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.size(96.dp).clip(CircleShape)
+                )
+            } else {
+                Box(
+                    modifier = Modifier
+                        .size(96.dp)
+                        .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Filled.Person,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSecondaryContainer,
+                        modifier = Modifier.size(52.dp)
+                    )
+                }
+            }
+            if (isUploadingAvatar) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(28.dp),
+                    strokeWidth = 2.dp
+                )
+            } else {
+                SmallFloatingActionButton(
+                    onClick = { imagePicker.launch("image/*") },
+                    modifier = Modifier.size(32.dp),
+                    containerColor = MaterialTheme.colorScheme.primary
+                ) {
+                    Icon(Icons.Filled.CameraAlt, contentDescription = "Change photo", modifier = Modifier.size(16.dp))
+                }
+            }
         }
 
         Spacer(modifier = Modifier.height(16.dp))
 
         Text(
             "Edit Profile",
-            style = MaterialTheme.typography.headlineLarge,
+            style = MaterialTheme.typography.headlineMedium,
             fontWeight = FontWeight.Bold
         )
-        Text(
-            "Update your information",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
 
-        Spacer(modifier = Modifier.height(36.dp))
+        Spacer(modifier = Modifier.height(28.dp))
 
         OutlinedTextField(
             value = username,
@@ -185,7 +223,6 @@ fun ManageProfileScreen(
             onClick = {
                 scope.launch {
                     var allSuccessful = true
-
                     if (username.isNotBlank()) {
                         val error = authRepo.updateUsername(username)
                         if (error != null) {
@@ -193,15 +230,12 @@ fun ManageProfileScreen(
                             allSuccessful = false
                         }
                     }
-
                     val bioRes = authRepo.updateBio(bio)
                     if (!bioRes) allSuccessful = false
-
                     if (lastFmUsername.isNotBlank()) {
                         val lastFmRes = authRepo.updateLastFm(lastFmUsername)
                         if (!lastFmRes) allSuccessful = false
                     }
-
                     if (allSuccessful) {
                         authRepo.updateVisibilityMode(visibilityMode)
                         Toast.makeText(context, "Profile Updated!", Toast.LENGTH_SHORT).show()
@@ -210,11 +244,11 @@ fun ManageProfileScreen(
                 }
             },
             shape = RoundedCornerShape(50),
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(52.dp)
+            modifier = Modifier.fillMaxWidth().height(52.dp)
         ) {
             Text("Save Changes", style = MaterialTheme.typography.labelLarge)
+        }
+
         }
     }
 }

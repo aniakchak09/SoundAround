@@ -4,6 +4,7 @@ import android.util.Log
 import io.github.jan.supabase.auth.auth
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.postgrest.query.Columns
+import licenta.soundaround.auth.data.ProfileDto
 import licenta.soundaround.core.SupabaseConfig
 import licenta.soundaround.social.domain.model.Conversation
 import licenta.soundaround.social.domain.model.FriendRequest
@@ -255,6 +256,70 @@ class SocialRepository {
                 ?.expiresAt
         } catch (e: Exception) {
             null
+        }
+    }
+
+    private suspend fun getFriendIds(userId: String): Set<String> {
+        return try {
+            val asSender = client.from("friendships")
+                .select(Columns.raw("friend_id")) {
+                    filter { eq("user_id", userId); eq("status", "accepted") }
+                }
+                .decodeList<FriendRequestDto>()
+                .map { it.friendId }
+
+            val asReceiver = client.from("friendships")
+                .select(Columns.raw("user_id")) {
+                    filter { eq("friend_id", userId); eq("status", "accepted") }
+                }
+                .decodeList<FriendRequestDto>()
+                .map { it.userId }
+
+            (asSender + asReceiver).toSet()
+        } catch (e: Exception) {
+            emptySet()
+        }
+    }
+
+    suspend fun unfriend(friendId: String): Boolean {
+        return try {
+            val myId = currentUserId() ?: return false
+            // Delete both directions (user_id=me,friend_id=them) and (user_id=them,friend_id=me)
+            client.from("friendships").delete {
+                filter {
+                    or {
+                        and {
+                            eq("user_id", myId)
+                            eq("friend_id", friendId)
+                        }
+                        and {
+                            eq("user_id", friendId)
+                            eq("friend_id", myId)
+                        }
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "unfriend failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun getFriends(): List<Pair<String, String>> {
+        return try {
+            val userId = currentUserId() ?: return emptyList()
+            val friendIds = getFriendIds(userId).toList()
+            if (friendIds.isEmpty()) return emptyList()
+            client.from("profiles")
+                .select(Columns.raw("id,username")) {
+                    filter { isIn("id", friendIds) }
+                }
+                .decodeList<ProfileDto>()
+                .map { it.id to (it.username.takeIf { u -> u.isNotBlank() } ?: it.id) }
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "getFriends failed: ${e.message}")
+            emptyList()
         }
     }
 

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
@@ -53,6 +54,9 @@ fun LoginScreen(
     var password by rememberSaveable { mutableStateOf("") }
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var showForgotDialog by rememberSaveable { mutableStateOf(false) }
+    var resetEmail by rememberSaveable { mutableStateOf("") }
+    var resetMessage by rememberSaveable { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -163,6 +167,69 @@ fun LoginScreen(
             Text("Don't have an account? Create one")
         }
 
+        TextButton(onClick = {
+            resetEmail = email
+            resetMessage = null
+            showForgotDialog = true
+        }) {
+            Text("Forgot password?")
+        }
+
         Spacer(modifier = Modifier.weight(1f))
+    }
+
+    if (showForgotDialog) {
+        AlertDialog(
+            onDismissRequest = { showForgotDialog = false },
+            title = { Text("Reset Password") },
+            text = {
+                Column {
+                    Text(
+                        "Enter your email and we'll send you a reset link.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    OutlinedTextField(
+                        value = resetEmail,
+                        onValueChange = { resetEmail = it; resetMessage = null },
+                        label = { Text("Email") },
+                        singleLine = true,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    resetMessage?.let {
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            it,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = if (it.startsWith("Check")) MaterialTheme.colorScheme.primary
+                                    else MaterialTheme.colorScheme.error
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        if (resetEmail.isBlank()) {
+                            resetMessage = "Please enter your email."
+                            return@Button
+                        }
+                        scope.launch {
+                            when (val result = authRepo.resetPassword(resetEmail)) {
+                                is AuthResponse.Success ->
+                                    resetMessage = "Check your email for the reset link."
+                                is AuthResponse.Error ->
+                                    resetMessage = result.message
+                            }
+                        }
+                    }
+                ) { Text("Send") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showForgotDialog = false }) { Text("Cancel") }
+            }
+        )
     }
 }

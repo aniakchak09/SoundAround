@@ -10,5 +10,6 @@ data class ItunesResponse(
 data class ItunesTrackDto(
     val trackName: String?,
     val artistName: String?,
-    @SerializedName("previewUrl") val previewUrl: String?
+    @SerializedName("previewUrl") val previewUrl: String?,
+    @SerializedName("artworkUrl100") val artworkUrl100: String? = null
 )

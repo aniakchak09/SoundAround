@@ -85,7 +85,8 @@ private const val STYLE_URL =
 fun MapScreen(
     viewModel: MapViewModel,
     onPing: (UserLocation) -> Unit,
-    onGoToConversation: (conversationId: String, otherUsername: String, isPersistent: Boolean, otherUserId: String) -> Unit
+    onGoToConversation: (conversationId: String, otherUsername: String, isPersistent: Boolean, otherUserId: String) -> Unit,
+    onOpenUserProfile: (userId: String, username: String) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -264,6 +265,9 @@ fun MapScreen(
         ) {
             UserCard(
                 user = user,
+                bio = viewModel.selectedUserBio,
+                lastFmUsername = viewModel.selectedUserLastFm,
+                recentTracks = viewModel.selectedUserRecentTracks,
                 existingConversationId = viewModel.existingConversation?.id,
                 previewUrl = viewModel.previewUrl,
                 isPreviewLoading = viewModel.isPreviewLoading,
@@ -277,6 +281,11 @@ fun MapScreen(
                     val conv = viewModel.existingConversation ?: return@UserCard
                     viewModel.dismissUser()
                     onGoToConversation(conv.id, conv.otherUsername, conv.isPersistent, conv.otherUserId)
+                },
+                onOpenProfile = {
+                    val username = user.username ?: user.userId
+                    viewModel.dismissUser()
+                    onOpenUserProfile(user.userId, username)
                 }
             )
         }
@@ -286,13 +295,17 @@ fun MapScreen(
 @Composable
 private fun UserCard(
     user: UserLocation,
+    bio: String?,
+    lastFmUsername: String?,
+    recentTracks: List<licenta.soundaround.music.domain.model.Track>,
     existingConversationId: String?,
     previewUrl: String?,
     isPreviewLoading: Boolean,
     isPreviewPlaying: Boolean,
     onTogglePreview: () -> Unit,
     onPing: () -> Unit,
-    onGoToConversation: () -> Unit
+    onGoToConversation: () -> Unit,
+    onOpenProfile: () -> Unit
 ) {
     Column(
         modifier = Modifier
@@ -305,7 +318,9 @@ private fun UserCard(
         Text(
             text = "@${user.username ?: user.userId}",
             style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.clickable { onOpenProfile() }
         )
 
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -344,6 +359,12 @@ private fun UserCard(
                 )
             }
         }
+
+        Text(
+            text = "Tap username to view full profile",
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+        )
 
         if (isPreviewLoading || previewUrl != null) {
             Row(

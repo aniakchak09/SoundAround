@@ -89,6 +89,7 @@ dependencies {
 
     // Postgrest module (This is what you need for '.from("profiles").upsert()')
     implementation("io.github.jan-tennert.supabase:postgrest-kt")
+    implementation("io.github.jan-tennert.supabase:storage-kt")
 
     // Ktor Client (Supabase needs an engine to actually make the network calls)
     implementation("io.ktor:ktor-client-android:3.0.0")

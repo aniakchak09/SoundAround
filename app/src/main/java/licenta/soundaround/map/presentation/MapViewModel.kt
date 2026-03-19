@@ -17,6 +17,7 @@ import licenta.soundaround.core.SupabaseConfig
 import licenta.soundaround.core.toUserMessage
 import licenta.soundaround.map.data.MapRepository
 import licenta.soundaround.map.domain.model.UserLocation
+import licenta.soundaround.music.domain.model.Track
 import licenta.soundaround.music.domain.repository.MusicRepository
 import licenta.soundaround.social.data.SocialRepository
 import licenta.soundaround.social.domain.model.Conversation
@@ -46,6 +47,12 @@ class MapViewModel(
     var isPreviewLoading by mutableStateOf(false)
         private set
     var isPreviewPlaying by mutableStateOf(false)
+        private set
+    var selectedUserBio by mutableStateOf<String?>(null)
+        private set
+    var selectedUserLastFm by mutableStateOf<String?>(null)
+        private set
+    var selectedUserRecentTracks by mutableStateOf<List<Track>>(emptyList())
         private set
 
     private var mediaPlayer: MediaPlayer? = null
@@ -100,6 +107,9 @@ class MapViewModel(
         stopPreview()
         previewUrl = null
         existingConversation = null
+        selectedUserBio = null
+        selectedUserLastFm = null
+        selectedUserRecentTracks = emptyList()
         selectedUser = user
 
         viewModelScope.launch {
@@ -110,6 +120,12 @@ class MapViewModel(
                 }
             }
             existingConversation = socialRepository.findConversationWith(user.userId)
+            val (bio, lastFm) = repository.getUserProfileDetails(user.userId)
+            selectedUserBio = bio
+            selectedUserLastFm = lastFm
+            if (!lastFm.isNullOrBlank()) {
+                selectedUserRecentTracks = musicRepository.getRecentTracks(lastFm, 5)
+            }
         }
 
         val artist = user.artistName
@@ -132,6 +148,9 @@ class MapViewModel(
         stopPreview()
         previewUrl = null
         existingConversation = null
+        selectedUserBio = null
+        selectedUserLastFm = null
+        selectedUserRecentTracks = emptyList()
         selectedUser = null
     }
 

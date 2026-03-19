@@ -6,6 +6,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -27,12 +28,16 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import licenta.soundaround.auth.data.AuthRepository
+import licenta.soundaround.auth.presentation.MyProfileScreen
+import licenta.soundaround.auth.presentation.MyProfileViewModel
 import licenta.soundaround.map.data.MapRepository
 import licenta.soundaround.map.presentation.MapScreen
 import licenta.soundaround.map.presentation.MapViewModel
 import licenta.soundaround.music.domain.repository.MusicRepository
 import licenta.soundaround.music.presentation.LastFmScreen
 import licenta.soundaround.music.presentation.LastFmViewModel
+import licenta.soundaround.music.presentation.UserProfileScreen
+import licenta.soundaround.music.presentation.UserProfileViewModel
 import licenta.soundaround.presence.data.PresenceRepository
 import licenta.soundaround.social.data.SocialRepository
 import licenta.soundaround.social.presentation.ChatScreen
@@ -43,7 +48,9 @@ import licenta.soundaround.social.presentation.ConversationsViewModel
 private const val TAB_NOW_PLAYING = "now_playing"
 private const val TAB_MAP = "map"
 private const val TAB_CHATS = "chats"
+private const val TAB_PROFILE = "profile_tab"
 private const val SCREEN_CHAT = "chat/{conversationId}?otherUsername={otherUsername}&isPersistent={isPersistent}&otherUserId={otherUserId}"
+private const val SCREEN_USER_PROFILE = "user_profile/{userId}?username={username}"
 
 @Composable
 fun MainScreen(
@@ -62,7 +69,7 @@ fun MainScreen(
     val scope = rememberCoroutineScope()
 
     // Only show bottom bar on tab screens
-    val showBottomBar = currentRoute in listOf(TAB_NOW_PLAYING, TAB_MAP, TAB_CHATS)
+    val showBottomBar = currentRoute in listOf(TAB_NOW_PLAYING, TAB_MAP, TAB_CHATS, TAB_PROFILE)
 
     Scaffold(
         bottomBar = {
@@ -86,6 +93,12 @@ fun MainScreen(
                         icon = { Icon(Icons.Filled.Chat, contentDescription = null) },
                         label = { Text("Chats") }
                     )
+                    NavigationBarItem(
+                        selected = currentRoute == TAB_PROFILE,
+                        onClick = { innerNav.navigate(TAB_PROFILE) { launchSingleTop = true } },
+                        icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                        label = { Text("Profile") }
+                    )
                 }
             }
         }
@@ -108,12 +121,7 @@ fun MainScreen(
                         }
                     }
                 )
-                LastFmScreen(
-                    viewModel = vm,
-                    authRepo = authRepo,
-                    onNavToProfile = onNavToProfile,
-                    onSignOut = onSignOut
-                )
+                LastFmScreen(viewModel = vm)
             }
 
             composable(TAB_MAP) {
@@ -147,6 +155,9 @@ fun MainScreen(
                     },
                     onGoToConversation = { conversationId, otherUsername, isPersistent, otherUserId ->
                         innerNav.navigate("chat/$conversationId?otherUsername=$otherUsername&isPersistent=$isPersistent&otherUserId=$otherUserId")
+                    },
+                    onOpenUserProfile = { userId, username ->
+                        innerNav.navigate("user_profile/$userId?username=$username")
                     }
                 )
             }
@@ -167,6 +178,54 @@ fun MainScreen(
                         )
                     }
                 )
+            }
+
+            composable(TAB_PROFILE) {
+                val vm: MyProfileViewModel = viewModel(
+                    factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return MyProfileViewModel(authRepo, trackRepository, socialRepository) as T
+                        }
+                    }
+                )
+                MyProfileScreen(
+                    viewModel = vm,
+                    onEditProfile = onNavToProfile,
+                    onSignOut = {
+                        scope.launch { authRepo.signOut(); onSignOut() }
+                    },
+                    onViewFriendProfile = { userId, username ->
+                        innerNav.navigate("user_profile/$userId?username=$username")
+                    }
+                )
+            }
+
+            composable(
+                route = SCREEN_USER_PROFILE,
+                arguments = listOf(
+                    navArgument("userId") { type = NavType.StringType },
+                    navArgument("username") {
+                        type = NavType.StringType
+                        defaultValue = ""
+                    }
+                )
+            ) { backStackEntry ->
+                val userId = backStackEntry.arguments?.getString("userId") ?: return@composable
+                val username = backStackEntry.arguments?.getString("username") ?: ""
+                val vm: UserProfileViewModel = viewModel(
+                    key = userId,
+                    factory = object : ViewModelProvider.Factory {
+                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                            return UserProfileViewModel(
+                                userId,
+                                username,
+                                AppContainer.mapRepository,
+                                AppContainer.trackRepository
+                            ) as T
+                        }
+                    }
+                )
+                UserProfileScreen(viewModel = vm, onBack = { innerNav.popBackStack() })
             }
 
             composable(
