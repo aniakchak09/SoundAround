@@ -245,6 +245,19 @@ class SocialRepository {
         }
     }
 
+    suspend fun getConversationExpiresAt(conversationId: String): String? {
+        return try {
+            client.from("conversations")
+                .select(Columns.raw("expires_at")) {
+                    filter { eq("id", conversationId) }
+                }
+                .decodeSingleOrNull<ExpiresAtDto>()
+                ?.expiresAt
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     private suspend fun getUsernameForId(userId: String): String? {
         return try {
             client.from("profiles")

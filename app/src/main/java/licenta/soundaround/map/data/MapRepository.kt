@@ -12,6 +12,7 @@ import licenta.soundaround.map.domain.model.UserLocation
 @Serializable
 private data class PrivacyProfileDto(
     val id: String,
+    val username: String? = null,
     @SerialName("privacy_mode") val privacyMode: VisibilityMode? = VisibilityMode.PUBLIC
 )
 
@@ -38,22 +39,24 @@ class MapRepository {
         val userIds = rawLocations.map { it.userId }.distinct()
         if (userIds.isEmpty()) return emptyList()
 
-        val privacyModes = client.from("profiles")
-            .select(Columns.raw("id,privacy_mode")) {
+        val profiles = client.from("profiles")
+            .select(Columns.raw("id,username,privacy_mode")) {
                 filter { isIn("id", userIds) }
             }
             .decodeList<PrivacyProfileDto>()
-            .associate { it.id to (it.privacyMode ?: VisibilityMode.PUBLIC) }
+            .associateBy { it.id }
 
         val friendIds = getFriendIds(currentUserId)
 
-        return rawLocations.filter { user ->
-            when (privacyModes[user.userId] ?: VisibilityMode.PUBLIC) {
-                VisibilityMode.PUBLIC -> true
-                VisibilityMode.FRIENDS_ONLY -> user.userId in friendIds
-                VisibilityMode.INVISIBLE -> false
+        return rawLocations
+            .filter { user ->
+                when (profiles[user.userId]?.privacyMode ?: VisibilityMode.PUBLIC) {
+                    VisibilityMode.PUBLIC -> true
+                    VisibilityMode.FRIENDS_ONLY -> user.userId in friendIds
+                    VisibilityMode.INVISIBLE -> false
+                }
             }
-        }
+            .map { user -> user.copy(username = profiles[user.userId]?.username?.takeIf { it.isNotBlank() }) }
     }
 
     private suspend fun getFriendIds(userId: String): Set<String> {

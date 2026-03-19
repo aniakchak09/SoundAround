@@ -12,6 +12,10 @@ import kotlinx.coroutines.launch
 import licenta.soundaround.core.toUserMessage
 import licenta.soundaround.social.data.SocialRepository
 import licenta.soundaround.social.domain.model.Message
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
+import java.util.TimeZone
 
 class ChatViewModel(
     private val repository: SocialRepository,
@@ -29,12 +33,54 @@ class ChatViewModel(
         private set
     var friendRequestSent by mutableStateOf(false)
         private set
+    var expiresLabel by mutableStateOf<String?>(null)
+        private set
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage: SharedFlow<String> = _toastMessage
 
+    private val isoFormats = listOf(
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSS+00:00",
+        "yyyy-MM-dd'T'HH:mm:ss.SSSSSSX",
+        "yyyy-MM-dd'T'HH:mm:ssX",
+        "yyyy-MM-dd'T'HH:mm:ss'Z'",
+        "yyyy-MM-dd'T'HH:mm:ss"
+    ).map { pattern ->
+        SimpleDateFormat(pattern, Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
+    }
+
     init {
         startPolling()
+        if (!initialIsPersistent) fetchAndTickExpiry()
+    }
+
+    private fun fetchAndTickExpiry() {
+        viewModelScope.launch {
+            val expiresAt = repository.getConversationExpiresAt(conversationId) ?: return@launch
+            val expiryDate = isoFormats.firstNotNullOfOrNull { fmt ->
+                runCatching { fmt.parse(expiresAt) }.getOrNull()
+            } ?: return@launch
+            while (true) {
+                val secondsLeft = (expiryDate.time - Date().time) / 1000
+                expiresLabel = formatTimeLeft(secondsLeft)
+                if (secondsLeft <= 0) break
+                delay(1_000L)
+            }
+        }
+    }
+
+    private fun formatTimeLeft(seconds: Long): String {
+        if (seconds <= 0) return "Chat expired"
+        val d = seconds / 86400
+        val h = (seconds % 86400) / 3600
+        val m = (seconds % 3600) / 60
+        val s = seconds % 60
+        return when {
+            d > 0 -> "Expires in ${d}d ${h}h"
+            h > 0 -> "Expires in ${h}h ${m}m"
+            m > 0 -> "Expires in ${m}m ${s}s"
+            else  -> "Expires in ${s}s"
+        }
     }
 
     private fun startPolling() {

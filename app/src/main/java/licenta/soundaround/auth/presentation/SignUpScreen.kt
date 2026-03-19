@@ -21,6 +21,7 @@ import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -63,6 +64,8 @@ fun SignUpScreen(
     var usernameError by rememberSaveable { mutableStateOf(false) }
     var emailError by rememberSaveable { mutableStateOf(false) }
     var passwordError by rememberSaveable { mutableStateOf(false) }
+    var confirmPasswordError by rememberSaveable { mutableStateOf(false) }
+    var isLoading by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -182,9 +185,11 @@ fun SignUpScreen(
 
         OutlinedTextField(
             value = confirmPassword,
-            onValueChange = { confirmPassword = it },
+            onValueChange = { confirmPassword = it; confirmPasswordError = false },
             label = { Text("Confirm Password *") },
             singleLine = true,
+            isError = confirmPasswordError,
+            supportingText = { if (confirmPasswordError) Text("Passwords do not match") },
             shape = RoundedCornerShape(12.dp),
             visualTransformation = if (confirmPasswordVisible) VisualTransformation.None else PasswordVisualTransformation(),
             trailingIcon = {
@@ -205,32 +210,40 @@ fun SignUpScreen(
                 usernameError = username.isBlank()
                 emailError = email.isBlank()
                 passwordError = password.isBlank()
+                confirmPasswordError = password != confirmPassword
 
-                if (!username.isBlank() && !email.isBlank() && !password.isBlank()) {
-                    if (password != confirmPassword) {
-                        Toast.makeText(context, "Passwords do not match", Toast.LENGTH_SHORT).show()
-                    } else {
-                        scope.launch {
-                            authRepo.signUp(email, password, username, bio, lastFmUsername)
-                                .collect { response ->
-                                    when (response) {
-                                        is AuthResponse.Success -> onSignUpSuccess()
-                                        is AuthResponse.Error -> {
-                                            Log.d("SignUpScreen", "Registration failed: ${response.message}")
-                                            Toast.makeText(context, response.message, Toast.LENGTH_SHORT).show()
-                                        }
+                if (!username.isBlank() && !email.isBlank() && !password.isBlank() && !confirmPasswordError) {
+                    scope.launch {
+                        isLoading = true
+                        authRepo.signUp(email, password, username, bio, lastFmUsername)
+                            .collect { response ->
+                                when (response) {
+                                    is AuthResponse.Success -> onSignUpSuccess()
+                                    is AuthResponse.Error -> {
+                                        Log.d("SignUpScreen", "Registration failed: ${response.message}")
+                                        Toast.makeText(context, response.message, Toast.LENGTH_SHORT).show()
+                                        isLoading = false
                                     }
                                 }
-                        }
+                            }
                     }
                 }
             },
+            enabled = !isLoading,
             shape = RoundedCornerShape(50),
             modifier = Modifier
                 .fillMaxWidth()
                 .height(52.dp)
         ) {
-            Text("Create Account", style = MaterialTheme.typography.labelLarge)
+            if (isLoading) {
+                CircularProgressIndicator(
+                    modifier = Modifier.size(20.dp),
+                    strokeWidth = 2.dp,
+                    color = MaterialTheme.colorScheme.onPrimary
+                )
+            } else {
+                Text("Create Account", style = MaterialTheme.typography.labelLarge)
+            }
         }
 
         onNavigateToLogin?.let {

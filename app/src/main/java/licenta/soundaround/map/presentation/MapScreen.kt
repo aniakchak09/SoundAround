@@ -33,6 +33,8 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
@@ -44,6 +46,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
 import android.widget.Toast
 import androidx.compose.runtime.Composable
+import androidx.compose.foundation.clickable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -109,6 +112,7 @@ fun MapScreen(
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
     val users = viewModel.users
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
+    var showNearbyDropdown by remember { mutableStateOf(false) }
 
     LaunchedEffect(Unit) {
         viewModel.toastMessage.collect { message ->
@@ -170,32 +174,71 @@ fun MapScreen(
             modifier = Modifier.fillMaxSize()
         )
 
-        Surface(
+        Box(
             modifier = Modifier
                 .align(Alignment.TopStart)
                 .statusBarsPadding()
-                .padding(start = 16.dp, top = 12.dp),
-            shape = RoundedCornerShape(50),
-            shadowElevation = 4.dp,
-            color = MaterialTheme.colorScheme.surface
+                .padding(start = 16.dp, top = 12.dp)
         ) {
-            Row(
-                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
-                verticalAlignment = Alignment.CenterVertically
+            Surface(
+                shape = RoundedCornerShape(50),
+                shadowElevation = 4.dp,
+                color = MaterialTheme.colorScheme.surface,
+                modifier = Modifier.clickable(enabled = users.isNotEmpty()) {
+                    showNearbyDropdown = true
+                }
             ) {
-                Icon(
-                    Icons.Filled.Map,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-                Spacer(modifier = Modifier.width(6.dp))
-                Text(
-                    text = if (users.isEmpty()) "No listeners nearby"
-                    else "${users.size} listener${if (users.size != 1) "s" else ""} nearby",
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
+                Row(
+                    modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.Map,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text(
+                        text = if (users.isEmpty()) "No listeners nearby"
+                        else "${users.size} listener${if (users.size != 1) "s" else ""} nearby",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                }
+            }
+
+            DropdownMenu(
+                expanded = showNearbyDropdown,
+                onDismissRequest = { showNearbyDropdown = false }
+            ) {
+                users.forEach { user ->
+                    DropdownMenuItem(
+                        text = {
+                            Column {
+                                Text(
+                                    text = "@${user.username ?: user.userId}",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                if (user.trackName != null) {
+                                    Text(
+                                        text = "${if (user.isPlaying) "▶ " else ""}${user.trackName}",
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            }
+                        },
+                        onClick = {
+                            showNearbyDropdown = false
+                            mapRef.value?.cameraPosition = CameraPosition.Builder()
+                                .target(LatLng(user.lat, user.lng))
+                                .zoom(15.0)
+                                .build()
+                        }
+                    )
+                }
             }
         }
 

@@ -8,6 +8,9 @@ import licenta.soundaround.social.domain.model.Conversation
 data class ProfileRef(val username: String = "")
 
 @Serializable
+data class ExpiresAtDto(@SerialName("expires_at") val expiresAt: String? = null)
+
+@Serializable
 data class ConversationDto(
     val id: String = "",
     @SerialName("user_one_id") val userOneId: String = "",

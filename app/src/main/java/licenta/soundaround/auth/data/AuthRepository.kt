@@ -26,8 +26,25 @@ sealed interface AuthResponse {
 class AuthRepository {
     private val client = SupabaseConfig.client
 
+    private suspend fun isUsernameTaken(username: String, excludeId: String? = null): Boolean {
+        return try {
+            val matches = client.from("profiles")
+                .select { filter { ilike("username", username) } }
+                .decodeList<ProfileDto>()
+            if (excludeId != null) matches.any { it.id != excludeId } else matches.isNotEmpty()
+        } catch (e: Exception) {
+            false
+        }
+    }
+
     fun signUp(email: String, pass: String, username: String, bio: String, lastFmUsername: String): Flow<AuthResponse> = flow {
         Log.d("AuthRepository", "Attempting sign-up for $email")
+
+        if (username.isNotBlank() && isUsernameTaken(username)) {
+            emit(AuthResponse.Error("Username already taken. Please choose a different one."))
+            return@flow
+        }
+
         try {
             client.auth.signUpWith(Email) {
                 this.email = email
@@ -44,23 +61,34 @@ class AuthRepository {
 
             try {
                 client.auth.retrieveUserForCurrentSession(updateSession = true)
-                Log.d("AuthRepository", "Session retrieved, inserting profile...")
-                client.from("profiles").insert(
+                Log.d("AuthRepository", "Session retrieved, upserting profile...")
+                client.from("profiles").upsert(
                     ProfileDto(id = id, username = username, bio = bio, lastFmUsername = lastFmUsername)
                 )
-                Log.d("AuthRepository", "Profile inserted successfully")
+                Log.d("AuthRepository", "Profile upserted successfully")
             } catch (e: Exception) {
                 Log.e("AuthRepository", "Profile insert failed: ${e.message}", e)
-                emit(AuthResponse.Error("Profile creation failed: ${e.message}"))
+                val friendlyMessage = when {
+                    e.message?.contains("username") == true &&
+                    (e.message?.contains("duplicate key") == true || e.message?.contains("unique") == true) ->
+                        "Username already taken. Please choose a different one."
+                    else -> "Account creation failed. Please try again."
+                }
+                // Sign out so the partial session doesn't interfere with a retry
+                try { client.auth.signOut() } catch (_: Exception) {}
+                emit(AuthResponse.Error(friendlyMessage))
                 return@flow
             }
 
             emit(AuthResponse.Success)
         } catch (e: RestException) {
             Log.d("AuthRepository", "Sign-up failed for $email: ${e.message}, status: ${e.statusCode}")
+            // Sign out in case signUpWith partially created a session
+            try { client.auth.signOut() } catch (_: Exception) {}
             emit(AuthResponse.Error(checkSignUpErrors(e)))
         } catch (e: Exception) {
             Log.d("AuthRepository", "Sign-up failed for $email: ${e.message}")
+            try { client.auth.signOut() } catch (_: Exception) {}
             emit(AuthResponse.Error(e.toUserMessage()))
         }
     }
@@ -139,23 +167,24 @@ class AuthRepository {
         }
     }
 
-    suspend fun updateUsername(username: String): Boolean {
+    suspend fun updateUsername(username: String): String? {
         return try {
             val id = client.auth.currentUserOrNull()?.id
             if (id != null) {
+                if (isUsernameTaken(username, excludeId = id)) return "Username already taken. Please choose a different one."
                 client.from("profiles").update({
                     set("username", username)
                 }) {
                     filter { eq("id", id) }
                 }
-                true
+                null
             } else {
                 Log.e("Auth", "No user logged in to update username")
-                false
+                "Not logged in."
             }
         } catch (e: Exception) {
             Log.e("Auth", "Update username failed", e)
-            false
+            "Failed to update username."
         }
     }
 

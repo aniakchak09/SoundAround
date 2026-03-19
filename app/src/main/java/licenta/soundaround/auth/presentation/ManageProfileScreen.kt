@@ -187,8 +187,11 @@ fun ManageProfileScreen(
                     var allSuccessful = true
 
                     if (username.isNotBlank()) {
-                        val res = authRepo.updateUsername(username)
-                        if (!res) allSuccessful = false
+                        val error = authRepo.updateUsername(username)
+                        if (error != null) {
+                            Toast.makeText(context, error, Toast.LENGTH_SHORT).show()
+                            allSuccessful = false
+                        }
                     }
 
                     val bioRes = authRepo.updateBio(bio)
