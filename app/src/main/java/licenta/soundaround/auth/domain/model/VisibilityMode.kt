@@ -5,7 +5,7 @@ import kotlinx.serialization.Serializable
 
 @Serializable
 enum class VisibilityMode {
-    @SerialName("PUBLIC") PUBLIC,
-    @SerialName("FRIENDS_ONLY") FRIENDS_ONLY,
-    @SerialName("INVISIBLE") INVISIBLE
+    @SerialName("public") PUBLIC,
+    @SerialName("friends_only") FRIENDS_ONLY,
+    @SerialName("invisible") INVISIBLE
 }

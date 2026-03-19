@@ -192,6 +192,21 @@ class AuthRepository {
         }
     }
 
+    suspend fun updateVisibilityMode(mode: VisibilityMode): Boolean {
+        return try {
+            val id = client.auth.currentUserOrNull()?.id ?: return false
+            client.from("profiles").update({
+                set("privacy_mode", mode.name.lowercase())
+            }) {
+                filter { eq("id", id) }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("Auth", "Update visibility mode failed", e)
+            false
+        }
+    }
+
     suspend fun updateLastFm(lastFmUsername: String): Boolean {
         return try {
             val id = client.auth.currentUserOrNull()?.id

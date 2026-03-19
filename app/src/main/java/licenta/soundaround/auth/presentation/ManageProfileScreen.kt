@@ -3,8 +3,10 @@ package licenta.soundaround.auth.presentation
 import android.util.Log
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,10 +21,12 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Button
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
+import licenta.soundaround.auth.domain.model.VisibilityMode
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -46,6 +50,7 @@ fun ManageProfileScreen(
     var username by rememberSaveable { mutableStateOf("") }
     var bio by rememberSaveable { mutableStateOf("") }
     var lastFmUsername by rememberSaveable { mutableStateOf("") }
+    var visibilityMode by rememberSaveable { mutableStateOf(VisibilityMode.PUBLIC) }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -57,6 +62,7 @@ fun ManageProfileScreen(
             username = profile?.username ?: ""
             bio = profile?.bio ?: ""
             lastFmUsername = profile?.lastFmUsername ?: ""
+            visibilityMode = authRepo.getVisibilityMode()
         }
         Log.d("ManageProfileScreen", "Session: $session")
     }
@@ -131,6 +137,48 @@ fun ManageProfileScreen(
             modifier = Modifier.fillMaxWidth()
         )
 
+        Spacer(modifier = Modifier.height(20.dp))
+
+        Text(
+            "Visibility on map",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            listOf(
+                VisibilityMode.PUBLIC to "Public",
+                VisibilityMode.FRIENDS_ONLY to "Friends",
+                VisibilityMode.INVISIBLE to "Invisible"
+            ).forEach { (mode, label) ->
+                FilterChip(
+                    selected = visibilityMode == mode,
+                    onClick = { visibilityMode = mode },
+                    label = { Text(label, maxLines = 1) },
+                    modifier = Modifier.weight(1f)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = when (visibilityMode) {
+                VisibilityMode.PUBLIC -> "Everyone nearby can see you on the map"
+                VisibilityMode.FRIENDS_ONLY -> "Only friends can see you on the map"
+                VisibilityMode.INVISIBLE -> "You won't appear on anyone's map"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.fillMaxWidth()
+        )
+
         Spacer(modifier = Modifier.height(32.dp))
 
         Button(
@@ -152,6 +200,7 @@ fun ManageProfileScreen(
                     }
 
                     if (allSuccessful) {
+                        authRepo.updateVisibilityMode(visibilityMode)
                         Toast.makeText(context, "Profile Updated!", Toast.LENGTH_SHORT).show()
                         onSuccess()
                     }

@@ -8,6 +8,7 @@ import android.graphics.Canvas
 import android.graphics.Paint
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -15,14 +16,19 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Map
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Button
@@ -30,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Surface
@@ -74,7 +81,8 @@ private const val STYLE_URL =
 @Composable
 fun MapScreen(
     viewModel: MapViewModel,
-    onPing: (UserLocation) -> Unit
+    onPing: (UserLocation) -> Unit,
+    onGoToConversation: (conversationId: String, otherUsername: String, isPersistent: Boolean, otherUserId: String) -> Unit
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
@@ -213,9 +221,19 @@ fun MapScreen(
         ) {
             UserCard(
                 user = user,
+                existingConversationId = viewModel.existingConversation?.id,
+                previewUrl = viewModel.previewUrl,
+                isPreviewLoading = viewModel.isPreviewLoading,
+                isPreviewPlaying = viewModel.isPreviewPlaying,
+                onTogglePreview = { viewModel.togglePreview() },
                 onPing = {
                     viewModel.dismissUser()
                     onPing(user)
+                },
+                onGoToConversation = {
+                    val conv = viewModel.existingConversation ?: return@UserCard
+                    viewModel.dismissUser()
+                    onGoToConversation(conv.id, conv.otherUsername, conv.isPersistent, conv.otherUserId)
                 }
             )
         }
@@ -223,10 +241,20 @@ fun MapScreen(
 }
 
 @Composable
-private fun UserCard(user: UserLocation, onPing: () -> Unit) {
+private fun UserCard(
+    user: UserLocation,
+    existingConversationId: String?,
+    previewUrl: String?,
+    isPreviewLoading: Boolean,
+    isPreviewPlaying: Boolean,
+    onTogglePreview: () -> Unit,
+    onPing: () -> Unit,
+    onGoToConversation: () -> Unit
+) {
     Column(
         modifier = Modifier
             .fillMaxWidth()
+            .verticalScroll(rememberScrollState())
             .padding(horizontal = 24.dp)
             .padding(bottom = 36.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -274,13 +302,67 @@ private fun UserCard(user: UserLocation, onPing: () -> Unit) {
             }
         }
 
-        Button(
-            onClick = onPing,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            Icon(Icons.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
-            Spacer(Modifier.width(8.dp))
-            Text("Send Ping")
+        if (isPreviewLoading || previewUrl != null) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+                    .padding(horizontal = 12.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (isPreviewLoading) {
+                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(12.dp))
+                    Text(
+                        "Loading preview…",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    IconButton(onClick = onTogglePreview, modifier = Modifier.size(36.dp)) {
+                        Icon(
+                            imageVector = if (isPreviewPlaying) Icons.Filled.Pause else Icons.Filled.PlayArrow,
+                            contentDescription = if (isPreviewPlaying) "Pause" else "Play",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                    Spacer(Modifier.width(8.dp))
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = if (isPreviewPlaying) "Playing preview" else "30s preview",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = "iTunes · 30 seconds",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+            }
+        }
+
+        if (existingConversationId != null) {
+            Button(
+                onClick = onGoToConversation,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Go to Conversation")
+            }
+        } else {
+            Button(
+                onClick = onPing,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Icon(Icons.Filled.Send, contentDescription = null, modifier = Modifier.size(18.dp))
+                Spacer(Modifier.width(8.dp))
+                Text("Send Ping")
+            }
         }
     }
 }

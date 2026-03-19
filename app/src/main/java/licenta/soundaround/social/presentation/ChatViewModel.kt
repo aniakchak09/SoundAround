@@ -27,6 +27,8 @@ class ChatViewModel(
         private set
     var isPersistent by mutableStateOf(initialIsPersistent)
         private set
+    var friendRequestSent by mutableStateOf(false)
+        private set
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage: SharedFlow<String> = _toastMessage
@@ -68,7 +70,7 @@ class ChatViewModel(
     fun sendFriendRequest() {
         viewModelScope.launch {
             if (repository.sendFriendRequest(otherUserId, conversationId)) {
-                isPersistent = true  // conversation won't expire while request is pending
+                friendRequestSent = true
                 _toastMessage.tryEmit("Friend request sent!")
             } else {
                 _toastMessage.tryEmit("Failed to send friend request. Try again.")

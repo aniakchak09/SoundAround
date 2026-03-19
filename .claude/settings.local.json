@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git -C /d/ai_nevoie_de_ele/cursuri/licenta/app_v2 log --oneline --all)",
+      "Bash(git -C /d/ai_nevoie_de_ele/cursuri/licenta/app_v2 log -p --follow -- local.properties)",
+      "Bash(git -C /d/ai_nevoie_de_ele/cursuri/licenta/app_v2 ls-files)"
+    ]
+  }
+}

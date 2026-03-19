@@ -72,9 +72,17 @@ fun ChatScreen(
                     }
                 },
                 actions = {
-                    if (!viewModel.isPersistent) {
-                        TextButton(onClick = { viewModel.sendFriendRequest() }) {
-                            Text("Add Friend")
+                    when {
+                        viewModel.isPersistent -> {}
+                        viewModel.friendRequestSent -> {
+                            TextButton(onClick = {}, enabled = false) {
+                                Text("Request Sent")
+                            }
+                        }
+                        else -> {
+                            TextButton(onClick = { viewModel.sendFriendRequest() }) {
+                                Text("Add Friend")
+                            }
                         }
                     }
                 }

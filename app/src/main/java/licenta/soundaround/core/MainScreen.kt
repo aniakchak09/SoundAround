@@ -120,7 +120,7 @@ fun MainScreen(
                 val vm: MapViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return MapViewModel(mapRepository, AppContainer.locationProvider) as T
+                            return MapViewModel(mapRepository, AppContainer.locationProvider, trackRepository, socialRepository) as T
                         }
                     }
                 )
@@ -144,6 +144,9 @@ fun MainScreen(
                                 Toast.makeText(context, "No internet connection.", Toast.LENGTH_SHORT).show()
                             }
                         }
+                    },
+                    onGoToConversation = { conversationId, otherUsername, isPersistent, otherUserId ->
+                        innerNav.navigate("chat/$conversationId?otherUsername=$otherUsername&isPersistent=$isPersistent&otherUserId=$otherUserId")
                     }
                 )
             }

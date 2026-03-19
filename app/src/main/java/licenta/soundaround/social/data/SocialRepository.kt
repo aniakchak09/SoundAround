@@ -145,12 +145,50 @@ class SocialRepository {
             client.from("friendships").insert(
                 FriendshipInsertDto(userId = fromUserId, friendId = toUserId)
             )
-            // Keep the conversation alive while waiting for acceptance
-            makePersistent(conversationId)
+            // Extend expiry by 7 days to keep conversation alive while request is pending,
+            // but don't make it persistent — that only happens after acceptance
+            val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+            cal.add(Calendar.DAY_OF_YEAR, 7)
+            val newExpiry = isoFormat.format(cal.time)
+            client.from("conversations").update({
+                set("expires_at", newExpiry)
+            }) {
+                filter { eq("id", conversationId) }
+            }
             true
         } catch (e: Exception) {
             Log.e("SocialRepository", "sendFriendRequest failed: ${e.message}")
             false
+        }
+    }
+
+    suspend fun findConversationWith(userId: String): Conversation? {
+        return try {
+            val myId = currentUserId() ?: return null
+            cleanupExpiredConversations()
+            client.from("conversations")
+                .select(
+                    Columns.raw(
+                        "*, user_one:profiles!conversations_user_one_id_fkey(username), user_two:profiles!conversations_user_two_id_fkey(username)"
+                    )
+                ) {
+                    filter {
+                        or {
+                            eq("user_one_id", myId)
+                            eq("user_two_id", myId)
+                        }
+                    }
+                }
+                .decodeList<ConversationDto>()
+                .filter {
+                    (it.userOneId == myId && it.userTwoId == userId) ||
+                    (it.userOneId == userId && it.userTwoId == myId)
+                }
+                .maxByOrNull { it.lastMessageAt ?: "" }
+                ?.toDomain(myId)
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "findConversationWith failed: ${e.message}")
+            null
         }
     }
 
