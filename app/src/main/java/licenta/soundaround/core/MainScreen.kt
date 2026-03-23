@@ -7,6 +7,8 @@ import androidx.compose.material.icons.filled.Chat
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -49,7 +51,7 @@ private const val TAB_NOW_PLAYING = "now_playing"
 private const val TAB_MAP = "map"
 private const val TAB_CHATS = "chats"
 private const val TAB_PROFILE = "profile_tab"
-private const val SCREEN_CHAT = "chat/{conversationId}?otherUsername={otherUsername}&isPersistent={isPersistent}&otherUserId={otherUserId}"
+private const val SCREEN_CHAT = "chat/{conversationId}?otherUsername={otherUsername}&isPersistent={isPersistent}&otherUserId={otherUserId}&myTrack={myTrack}&myArtist={myArtist}&theirTrack={theirTrack}&theirArtist={theirArtist}"
 private const val SCREEN_USER_PROFILE = "user_profile/{userId}?username={username}"
 
 @Composable
@@ -67,6 +69,14 @@ fun MainScreen(
     val backStack by innerNav.currentBackStackEntryAsState()
     val currentRoute = backStack?.destination?.route
     val scope = rememberCoroutineScope()
+
+    val conversationsVm: ConversationsViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return ConversationsViewModel(socialRepository) as T
+            }
+        }
+    )
 
     // Only show bottom bar on tab screens
     val showBottomBar = currentRoute in listOf(TAB_NOW_PLAYING, TAB_MAP, TAB_CHATS, TAB_PROFILE)
@@ -90,7 +100,15 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = currentRoute == TAB_CHATS,
                         onClick = { innerNav.navigate(TAB_CHATS) { launchSingleTop = true } },
-                        icon = { Icon(Icons.Filled.Chat, contentDescription = null) },
+                        icon = {
+                            BadgedBox(badge = {
+                                if (conversationsVm.unreadCount > 0) {
+                                    Badge { Text(conversationsVm.unreadCount.toString()) }
+                                }
+                            }) {
+                                Icon(Icons.Filled.Chat, contentDescription = null)
+                            }
+                        },
                         label = { Text("Chats") }
                     )
                     NavigationBarItem(
@@ -137,14 +155,26 @@ fun MainScreen(
                     onPing = { user ->
                         scope.launch {
                             try {
+                                val myUser = vm.users.find { it.userId == vm.currentUserId }
                                 val conversationId = socialRepository.sendPing(
                                     toUserId = user.userId,
                                     trackTitle = user.trackName,
-                                    trackArtist = user.artistName
+                                    trackArtist = user.artistName,
+                                    myTrackTitle = myUser?.trackName,
+                                    myTrackArtist = myUser?.artistName
                                 )
                                 if (conversationId != null) {
                                     val username = user.username ?: ""
-                                    innerNav.navigate("chat/$conversationId?otherUsername=$username&isPersistent=false&otherUserId=${user.userId}")
+                                    innerNav.navigate(
+                                        "chat/$conversationId" +
+                                        "?otherUsername=$username" +
+                                        "&isPersistent=false" +
+                                        "&otherUserId=${user.userId}" +
+                                        "&myTrack=${myUser?.trackName ?: ""}" +
+                                        "&myArtist=${myUser?.artistName ?: ""}" +
+                                        "&theirTrack=${user.trackName ?: ""}" +
+                                        "&theirArtist=${user.artistName ?: ""}"
+                                    )
                                 } else {
                                     Toast.makeText(context, "Could not start chat. Try again.", Toast.LENGTH_SHORT).show()
                                 }
@@ -163,18 +193,18 @@ fun MainScreen(
             }
 
             composable(TAB_CHATS) {
-                val vm: ConversationsViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return ConversationsViewModel(socialRepository) as T
-                        }
-                    }
-                )
                 ConversationsScreen(
-                    viewModel = vm,
+                    viewModel = conversationsVm,
                     onOpenChat = { conversation ->
                         innerNav.navigate(
-                            "chat/${conversation.id}?otherUsername=${conversation.otherUsername}&isPersistent=${conversation.isPersistent}&otherUserId=${conversation.otherUserId}"
+                            "chat/${conversation.id}" +
+                            "?otherUsername=${conversation.otherUsername}" +
+                            "&isPersistent=${conversation.isPersistent}" +
+                            "&otherUserId=${conversation.otherUserId}" +
+                            "&myTrack=${conversation.myInitialTrackTitle ?: ""}" +
+                            "&myArtist=${conversation.myInitialTrackArtist ?: ""}" +
+                            "&theirTrack=${conversation.theirInitialTrackTitle ?: ""}" +
+                            "&theirArtist=${conversation.theirInitialTrackArtist ?: ""}"
                         )
                     }
                 )
@@ -232,24 +262,24 @@ fun MainScreen(
                 route = SCREEN_CHAT,
                 arguments = listOf(
                     navArgument("conversationId") { type = NavType.StringType },
-                    navArgument("otherUsername") {
-                        type = NavType.StringType
-                        defaultValue = ""
-                    },
-                    navArgument("isPersistent") {
-                        type = NavType.BoolType
-                        defaultValue = false
-                    },
-                    navArgument("otherUserId") {
-                        type = NavType.StringType
-                        defaultValue = ""
-                    }
+                    navArgument("otherUsername") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("isPersistent") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("otherUserId") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("myTrack") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("myArtist") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("theirTrack") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("theirArtist") { type = NavType.StringType; defaultValue = "" }
                 )
             ) { backStackEntry ->
-                val conversationId = backStackEntry.arguments?.getString("conversationId") ?: return@composable
-                val otherUsername = backStackEntry.arguments?.getString("otherUsername") ?: ""
-                val isPersistent = backStackEntry.arguments?.getBoolean("isPersistent") ?: false
-                val otherUserId = backStackEntry.arguments?.getString("otherUserId") ?: ""
+                val args = backStackEntry.arguments
+                val conversationId = args?.getString("conversationId") ?: return@composable
+                val otherUsername = args.getString("otherUsername") ?: ""
+                val isPersistent = args.getBoolean("isPersistent")
+                val otherUserId = args.getString("otherUserId") ?: ""
+                val myTrack = args.getString("myTrack")?.takeIf { it.isNotBlank() }
+                val myArtist = args.getString("myArtist")?.takeIf { it.isNotBlank() }
+                val theirTrack = args.getString("theirTrack")?.takeIf { it.isNotBlank() }
+                val theirArtist = args.getString("theirArtist")?.takeIf { it.isNotBlank() }
                 val currentUserId = authRepo.getCurrentUser()?.id ?: ""
 
                 val vm: ChatViewModel = viewModel(
@@ -257,11 +287,8 @@ fun MainScreen(
                     factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
                             return ChatViewModel(
-                                socialRepository,
-                                conversationId,
-                                currentUserId,
-                                otherUserId,
-                                isPersistent
+                                socialRepository, conversationId, currentUserId, otherUserId,
+                                isPersistent, myTrack, myArtist, theirTrack, theirArtist
                             ) as T
                         }
                     }

@@ -22,7 +22,11 @@ class ChatViewModel(
     val conversationId: String,
     private val currentUserId: String,
     private val otherUserId: String,
-    initialIsPersistent: Boolean = false
+    initialIsPersistent: Boolean = false,
+    val myInitialTrackTitle: String? = null,
+    val myInitialTrackArtist: String? = null,
+    val theirInitialTrackTitle: String? = null,
+    val theirInitialTrackArtist: String? = null
 ) : ViewModel() {
 
     var messages by mutableStateOf<List<Message>>(emptyList())
@@ -35,6 +39,12 @@ class ChatViewModel(
         private set
     var expiresLabel by mutableStateOf<String?>(null)
         private set
+    var otherLastReadAt by mutableStateOf<String?>(null)
+        private set
+    var otherIsTyping by mutableStateOf(false)
+        private set
+
+    private var typingJob = viewModelScope.launch {}
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage: SharedFlow<String> = _toastMessage
@@ -54,8 +64,11 @@ class ChatViewModel(
         if (!initialIsPersistent) fetchAndTickExpiry()
     }
 
+    private var expiryTickerJob = viewModelScope.launch {}
+
     private fun fetchAndTickExpiry() {
-        viewModelScope.launch {
+        expiryTickerJob.cancel()
+        expiryTickerJob = viewModelScope.launch {
             val expiresAt = repository.getConversationExpiresAt(conversationId) ?: return@launch
             val expiryDate = isoFormats.firstNotNullOfOrNull { fmt ->
                 runCatching { fmt.parse(expiresAt) }.getOrNull()
@@ -88,6 +101,9 @@ class ChatViewModel(
             while (true) {
                 try {
                     messages = repository.loadMessages(conversationId)
+                    otherLastReadAt = repository.getOtherLastReadAt(conversationId)
+                    otherIsTyping = repository.getOtherIsTyping(conversationId)
+                    repository.markRead(conversationId)
                 } catch (e: Exception) {
                     _toastMessage.tryEmit(e.toUserMessage())
                 }
@@ -99,13 +115,14 @@ class ChatViewModel(
     fun sendMessage(content: String) {
         viewModelScope.launch {
             isSending = true
-            val ok = repository.sendMessage(conversationId, content)
+            val ok = repository.sendMessage(conversationId, content, isPersistent)
             if (ok) {
                 try {
                     messages = repository.loadMessages(conversationId)
                 } catch (e: Exception) {
                     _toastMessage.tryEmit(e.toUserMessage())
                 }
+                if (!isPersistent) fetchAndTickExpiry()
             } else {
                 _toastMessage.tryEmit("Failed to send message. Check your connection.")
             }
@@ -122,6 +139,40 @@ class ChatViewModel(
                 _toastMessage.tryEmit("Failed to send friend request. Try again.")
             }
         }
+    }
+
+    fun onTextChanged() {
+        typingJob.cancel()
+        typingJob = viewModelScope.launch {
+            repository.setTyping(conversationId, true)
+            delay(3_000L)
+            repository.setTyping(conversationId, false)
+        }
+    }
+
+    fun blockUser() {
+        viewModelScope.launch {
+            if (repository.blockUser(otherUserId)) {
+                _toastMessage.tryEmit("User blocked.")
+            } else {
+                _toastMessage.tryEmit("Failed to block user. Try again.")
+            }
+        }
+    }
+
+    fun reportUser(reason: String) {
+        viewModelScope.launch {
+            if (repository.reportUser(otherUserId, reason)) {
+                _toastMessage.tryEmit("Report submitted. Thank you.")
+            } else {
+                _toastMessage.tryEmit("Failed to submit report. Try again.")
+            }
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        viewModelScope.launch { repository.setTyping(conversationId, false) }
     }
 
     fun isMyMessage(message: Message) = message.senderId == currentUserId

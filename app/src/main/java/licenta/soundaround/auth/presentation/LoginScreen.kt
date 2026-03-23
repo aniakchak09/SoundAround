@@ -55,8 +55,13 @@ fun LoginScreen(
     var passwordVisible by rememberSaveable { mutableStateOf(false) }
     var errorMessage by rememberSaveable { mutableStateOf<String?>(null) }
     var showForgotDialog by rememberSaveable { mutableStateOf(false) }
+    var resetStep by rememberSaveable { mutableStateOf(1) }
     var resetEmail by rememberSaveable { mutableStateOf("") }
+    var resetOtp by rememberSaveable { mutableStateOf("") }
+    var resetNewPassword by rememberSaveable { mutableStateOf("") }
+    var resetConfirmPassword by rememberSaveable { mutableStateOf("") }
     var resetMessage by rememberSaveable { mutableStateOf<String?>(null) }
+    var isResetLoading by rememberSaveable { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
 
     Column(
@@ -169,7 +174,11 @@ fun LoginScreen(
 
         TextButton(onClick = {
             resetEmail = email
+            resetOtp = ""
+            resetNewPassword = ""
+            resetConfirmPassword = ""
             resetMessage = null
+            resetStep = 1
             showForgotDialog = true
         }) {
             Text("Forgot password?")
@@ -181,29 +190,78 @@ fun LoginScreen(
     if (showForgotDialog) {
         AlertDialog(
             onDismissRequest = { showForgotDialog = false },
-            title = { Text("Reset Password") },
+            title = {
+                Text(
+                    when (resetStep) {
+                        1 -> "Forgot Password"
+                        2 -> "Enter Code"
+                        else -> "New Password"
+                    }
+                )
+            },
             text = {
                 Column {
-                    Text(
-                        "Enter your email and we'll send you a reset link.",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(
-                        value = resetEmail,
-                        onValueChange = { resetEmail = it; resetMessage = null },
-                        label = { Text("Email") },
-                        singleLine = true,
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    when (resetStep) {
+                        1 -> {
+                            Text(
+                                "Enter your email and we'll send you a 6-digit code.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = resetEmail,
+                                onValueChange = { resetEmail = it; resetMessage = null },
+                                label = { Text("Email") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        2 -> {
+                            Text(
+                                "Enter the 6-digit code sent to $resetEmail.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Spacer(modifier = Modifier.height(12.dp))
+                            OutlinedTextField(
+                                value = resetOtp,
+                                onValueChange = { resetOtp = it; resetMessage = null },
+                                label = { Text("Code") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                        else -> {
+                            OutlinedTextField(
+                                value = resetNewPassword,
+                                onValueChange = { resetNewPassword = it; resetMessage = null },
+                                label = { Text("New Password") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                            Spacer(modifier = Modifier.height(8.dp))
+                            OutlinedTextField(
+                                value = resetConfirmPassword,
+                                onValueChange = { resetConfirmPassword = it; resetMessage = null },
+                                label = { Text("Confirm Password") },
+                                singleLine = true,
+                                shape = RoundedCornerShape(12.dp),
+                                visualTransformation = PasswordVisualTransformation(),
+                                modifier = Modifier.fillMaxWidth()
+                            )
+                        }
+                    }
                     resetMessage?.let {
                         Spacer(modifier = Modifier.height(8.dp))
                         Text(
                             it,
                             style = MaterialTheme.typography.bodySmall,
-                            color = if (it.startsWith("Check")) MaterialTheme.colorScheme.primary
+                            color = if (it.startsWith("Code sent")) MaterialTheme.colorScheme.primary
                                     else MaterialTheme.colorScheme.error
                         )
                     }
@@ -211,21 +269,54 @@ fun LoginScreen(
             },
             confirmButton = {
                 Button(
+                    enabled = !isResetLoading,
                     onClick = {
-                        if (resetEmail.isBlank()) {
-                            resetMessage = "Please enter your email."
-                            return@Button
-                        }
                         scope.launch {
-                            when (val result = authRepo.resetPassword(resetEmail)) {
-                                is AuthResponse.Success ->
-                                    resetMessage = "Check your email for the reset link."
-                                is AuthResponse.Error ->
-                                    resetMessage = result.message
+                            isResetLoading = true
+                            resetMessage = null
+                            when (resetStep) {
+                                1 -> {
+                                    if (resetEmail.isBlank()) {
+                                        resetMessage = "Please enter your email."
+                                    } else {
+                                        when (val r = authRepo.sendResetOtp(resetEmail)) {
+                                            is AuthResponse.Success -> {
+                                                resetMessage = "Code sent! Check your email."
+                                                resetStep = 2
+                                            }
+                                            is AuthResponse.Error -> resetMessage = r.message
+                                        }
+                                    }
+                                }
+                                2 -> {
+                                    if (resetOtp.isBlank()) {
+                                        resetMessage = "Please enter the code."
+                                    } else {
+                                        when (val r = authRepo.verifyResetOtp(resetEmail, resetOtp)) {
+                                            is AuthResponse.Success -> resetStep = 3
+                                            is AuthResponse.Error -> resetMessage = r.message
+                                        }
+                                    }
+                                }
+                                else -> {
+                                    if (resetNewPassword.isBlank()) {
+                                        resetMessage = "Password cannot be empty."
+                                    } else if (resetNewPassword != resetConfirmPassword) {
+                                        resetMessage = "Passwords do not match."
+                                    } else {
+                                        when (val r = authRepo.updatePassword(resetNewPassword)) {
+                                            is AuthResponse.Success -> showForgotDialog = false
+                                            is AuthResponse.Error -> resetMessage = r.message
+                                        }
+                                    }
+                                }
                             }
+                            isResetLoading = false
                         }
                     }
-                ) { Text("Send") }
+                ) {
+                    Text(when (resetStep) { 1 -> "Send Code"; 2 -> "Verify"; else -> "Update" })
+                }
             },
             dismissButton = {
                 TextButton(onClick = { showForgotDialog = false }) { Text("Cancel") }

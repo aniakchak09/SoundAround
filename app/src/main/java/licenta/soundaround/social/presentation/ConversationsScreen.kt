@@ -1,28 +1,36 @@
 package licenta.soundaround.social.presentation
 
 import android.widget.Toast
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SuggestionChip
+import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -32,9 +40,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import licenta.soundaround.social.domain.model.Conversation
 import licenta.soundaround.social.domain.model.FriendRequest
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -63,7 +75,9 @@ fun ConversationsScreen(
             )
         }
     ) { padding ->
-        Box(
+        PullToRefreshBox(
+            isRefreshing = viewModel.isLoading,
+            onRefresh = { viewModel.load() },
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
@@ -77,7 +91,7 @@ fun ConversationsScreen(
                         .align(Alignment.Center)
                         .padding(32.dp)
                 )
-                else -> LazyColumn {
+                else -> LazyColumn(modifier = Modifier.fillMaxSize()) {
                     if (viewModel.pendingRequests.isNotEmpty()) {
                         item {
                             Text(
@@ -123,46 +137,120 @@ private fun FriendRequestItem(
     onAccept: () -> Unit,
     onDecline: () -> Unit
 ) {
-    ListItem(
-        headlineContent = { Text("@${request.fromUsername}") },
-        supportingContent = { Text("wants to be friends") },
-        trailingContent = {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedButton(
-                    onClick = onDecline,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = MaterialTheme.colorScheme.error
-                    )
-                ) { Text("Decline") }
-                Button(onClick = onAccept) { Text("Accept") }
-            }
-        },
-        modifier = Modifier.fillMaxWidth()
-    )
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AvatarCircle(username = request.fromUsername)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text("@${request.fromUsername}", fontWeight = FontWeight.SemiBold)
+            Text(
+                "wants to be friends",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        OutlinedButton(
+            onClick = onDecline,
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+        ) { Text("Decline") }
+        Spacer(Modifier.width(6.dp))
+        Button(onClick = onAccept) { Text("Accept") }
+    }
 }
 
 @Composable
 private fun ConversationItem(conversation: Conversation, onClick: () -> Unit) {
-    ListItem(
-        headlineContent = { Text("@${conversation.otherUsername}") },
-        supportingContent = {
-            if (conversation.initialTrackTitle != null) {
-                Text(
-                    "${conversation.initialTrackTitle} · ${conversation.initialTrackArtist}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        },
-        trailingContent = {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        AvatarCircle(username = conversation.otherUsername)
+        Spacer(Modifier.width(12.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "@${conversation.otherUsername}",
+                fontWeight = if (conversation.isUnread) FontWeight.Bold else FontWeight.SemiBold,
+                style = MaterialTheme.typography.bodyLarge
+            )
+            Text(
+                text = conversation.lastMessageContent ?: "No messages yet",
+                style = MaterialTheme.typography.bodySmall,
+                fontWeight = if (conversation.isUnread) FontWeight.Medium else FontWeight.Normal,
+                color = if (conversation.isUnread) MaterialTheme.colorScheme.onSurface
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+        Spacer(Modifier.width(8.dp))
+        Column(horizontalAlignment = Alignment.End) {
+            Text(
+                timeAgo(conversation.lastMessageAt),
+                style = MaterialTheme.typography.labelSmall,
+                color = if (conversation.isUnread) MaterialTheme.colorScheme.primary
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                fontWeight = if (conversation.isUnread) FontWeight.Bold else FontWeight.Normal
+            )
+            Spacer(Modifier.size(4.dp))
             if (!conversation.isPersistent) {
-                Text(
-                    "Temp",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.error
+                SuggestionChip(
+                    onClick = {},
+                    label = { Text("Temp", style = MaterialTheme.typography.labelSmall) },
+                    colors = SuggestionChipDefaults.suggestionChipColors(
+                        containerColor = MaterialTheme.colorScheme.errorContainer,
+                        labelColor = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 )
             }
-        },
-        modifier = Modifier.clickable(onClick = onClick)
-    )
+            if (conversation.isUnread) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(MaterialTheme.colorScheme.primary, CircleShape)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun AvatarCircle(username: String) {
+    Box(
+        modifier = Modifier
+            .size(44.dp)
+            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer
+        )
+    }
+}
+
+private fun timeAgo(timestamp: String?): String {
+    if (timestamp == null) return ""
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.getDefault())
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        val clean = timestamp.substringBefore("+").trimEnd('Z').substringBefore(".")
+        val date = sdf.parse(clean) ?: return ""
+        val diff = System.currentTimeMillis() - date.time
+        when {
+            diff < 60_000 -> "now"
+            diff < 3_600_000 -> "${diff / 60_000}m"
+            diff < 86_400_000 -> "${diff / 3_600_000}h"
+            else -> "${diff / 86_400_000}d"
+        }
+    } catch (e: Exception) { "" }
 }

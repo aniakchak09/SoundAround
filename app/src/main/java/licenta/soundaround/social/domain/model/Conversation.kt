@@ -6,7 +6,11 @@ data class Conversation(
     val otherUsername: String,
     val isPersistent: Boolean,
     val expiresAt: String?,
-    val initialTrackTitle: String?,
-    val initialTrackArtist: String?,
-    val lastMessageAt: String?
+    val myInitialTrackTitle: String?,
+    val myInitialTrackArtist: String?,
+    val theirInitialTrackTitle: String?,
+    val theirInitialTrackArtist: String?,
+    val lastMessageAt: String?,
+    val lastMessageContent: String?,
+    val isUnread: Boolean
 )

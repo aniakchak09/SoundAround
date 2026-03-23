@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.launch
@@ -21,9 +22,26 @@ class ConversationsViewModel(private val repository: SocialRepository) : ViewMod
         private set
     var pendingRequests by mutableStateOf<List<FriendRequest>>(emptyList())
         private set
+    val unreadCount: Int get() = conversations.count { it.isUnread }
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
     val toastMessage: SharedFlow<String> = _toastMessage
+
+    init {
+        viewModelScope.launch {
+            while (true) {
+                loadInternal()
+                delay(15_000L)
+            }
+        }
+    }
+
+    private suspend fun loadInternal() {
+        try {
+            conversations = repository.loadConversations()
+            pendingRequests = repository.getPendingRequests()
+        } catch (_: Exception) {}
+    }
 
     fun load() {
         viewModelScope.launch {

@@ -37,7 +37,13 @@ class SocialRepository {
         }
     }
 
-    suspend fun sendPing(toUserId: String, trackTitle: String?, trackArtist: String?): String? {
+    suspend fun sendPing(
+        toUserId: String,
+        trackTitle: String?,
+        trackArtist: String?,
+        myTrackTitle: String? = null,
+        myTrackArtist: String? = null
+    ): String? {
         return try {
             val fromUserId = currentUserId() ?: return null
             val now = isoFormat.format(Date())
@@ -54,6 +60,8 @@ class SocialRepository {
                         expiresAt = expiresAt,
                         initialTrackTitle = trackTitle,
                         initialTrackArtist = trackArtist,
+                        myInitialTrackTitle = myTrackTitle,
+                        myInitialTrackArtist = myTrackArtist,
                         lastMessageAt = now
                     )
                 ) { select() }
@@ -108,9 +116,10 @@ class SocialRepository {
         }
     }
 
-    suspend fun sendMessage(conversationId: String, content: String): Boolean {
+    suspend fun sendMessage(conversationId: String, content: String, isPersistent: Boolean): Boolean {
         return try {
             val senderId = currentUserId() ?: return false
+            val now = isoFormat.format(Date())
             client.from("messages").insert(
                 MessageInsertDto(
                     conversationId = conversationId,
@@ -118,6 +127,31 @@ class SocialRepository {
                     content = content
                 )
             )
+            // Update last_message_at (and expires_at for temp chats) — essential for sorting
+            try {
+                if (!isPersistent) {
+                    val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
+                    cal.add(Calendar.HOUR_OF_DAY, 24)
+                    client.from("conversations").update({
+                        set("last_message_at", now)
+                        set("expires_at", isoFormat.format(cal.time))
+                    }) { filter { eq("id", conversationId) } }
+                } else {
+                    client.from("conversations").update({
+                        set("last_message_at", now)
+                    }) { filter { eq("id", conversationId) } }
+                }
+            } catch (e: Exception) {
+                Log.e("SocialRepository", "sendMessage timestamp update failed: ${e.message}")
+            }
+            // Update preview text separately — optional, may fail if column not migrated yet
+            try {
+                client.from("conversations").update({
+                    set("last_message_content", content)
+                }) { filter { eq("id", conversationId) } }
+            } catch (e: Exception) {
+                Log.e("SocialRepository", "sendMessage content update failed: ${e.message}")
+            }
             true
         } catch (e: Exception) {
             Log.e("SocialRepository", "sendMessage failed: ${e.message}")
@@ -244,6 +278,91 @@ class SocialRepository {
             Log.e("SocialRepository", "declineFriendRequest failed: ${e.message}")
             false
         }
+    }
+
+    suspend fun markRead(conversationId: String) {
+        val userId = currentUserId() ?: return
+        val now = isoFormat.format(Date())
+        // One of these will match (current user is either user_one or user_two)
+        try {
+            client.from("conversations").update({ set("user_one_last_read_at", now) }) {
+                filter { eq("id", conversationId); eq("user_one_id", userId) }
+            }
+        } catch (_: Exception) {}
+        try {
+            client.from("conversations").update({ set("user_two_last_read_at", now) }) {
+                filter { eq("id", conversationId); eq("user_two_id", userId) }
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun setTyping(conversationId: String, isTyping: Boolean) {
+        val userId = currentUserId() ?: return
+        val value = if (isTyping) isoFormat.format(Date()) else null
+        try {
+            client.from("conversations").update({ set("user_one_typing_at", value) }) {
+                filter { eq("id", conversationId); eq("user_one_id", userId) }
+            }
+        } catch (_: Exception) {}
+        try {
+            client.from("conversations").update({ set("user_two_typing_at", value) }) {
+                filter { eq("id", conversationId); eq("user_two_id", userId) }
+            }
+        } catch (_: Exception) {}
+    }
+
+    suspend fun getOtherIsTyping(conversationId: String): Boolean {
+        val userId = currentUserId() ?: return false
+        return try {
+            val dto = client.from("conversations")
+                .select(Columns.raw("user_one_id, user_one_typing_at, user_two_typing_at")) {
+                    filter { eq("id", conversationId) }
+                }
+                .decodeSingleOrNull<TypingStatusDto>() ?: return false
+            val theirTypingAt = (if (dto.userOneId == userId) dto.userTwoTypingAt else dto.userOneTypingAt)
+                ?: return false
+            val sdf = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+            sdf.timeZone = TimeZone.getTimeZone("UTC")
+            val clean = theirTypingAt.substringBefore("+").trimEnd('Z').substringBefore(".")
+            val typingMs = sdf.parse(clean)?.time ?: return false
+            System.currentTimeMillis() - typingMs < 5_000L
+        } catch (_: Exception) { false }
+    }
+
+    suspend fun blockUser(blockedId: String): Boolean {
+        return try {
+            val myId = currentUserId() ?: return false
+            client.from("blocks").insert(mapOf("blocker_id" to myId, "blocked_id" to blockedId))
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "blockUser failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun reportUser(reportedId: String, reason: String): Boolean {
+        return try {
+            val myId = currentUserId() ?: return false
+            client.from("reports").insert(
+                mapOf("reporter_id" to myId, "reported_id" to reportedId, "reason" to reason)
+            )
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "reportUser failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun getOtherLastReadAt(conversationId: String): String? {
+        val userId = currentUserId() ?: return null
+        return try {
+            val dto = client.from("conversations")
+                .select(Columns.raw("user_one_id, user_one_last_read_at, user_two_last_read_at")) {
+                    filter { eq("id", conversationId) }
+                }
+                .decodeSingleOrNull<ReadStatusDto>() ?: return null
+            if (dto.userOneId == userId) dto.userTwoLastReadAt else dto.userOneLastReadAt
+        } catch (e: Exception) { null }
     }
 
     suspend fun getConversationExpiresAt(conversationId: String): String? {

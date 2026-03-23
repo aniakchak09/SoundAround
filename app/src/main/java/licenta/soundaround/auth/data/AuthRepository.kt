@@ -2,7 +2,9 @@ package licenta.soundaround.auth.data
 
 import android.util.Log
 import io.github.jan.supabase.auth.auth
+import io.github.jan.supabase.auth.OtpType
 import io.github.jan.supabase.auth.providers.builtin.Email
+import io.github.jan.supabase.auth.providers.builtin.OTP
 import io.github.jan.supabase.exceptions.RestException
 import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.storage.storage
@@ -103,13 +105,40 @@ class AuthRepository {
         }
     }
 
-    suspend fun resetPassword(email: String): AuthResponse {
+    suspend fun sendResetOtp(email: String): AuthResponse {
         return try {
-            client.auth.resetPasswordForEmail(email)
+            client.auth.signInWith(OTP) {
+                this.email = email
+                createUser = false
+            }
             AuthResponse.Success
-        } catch (e: RestException) {
-            AuthResponse.Error(checkSignUpErrors(e))
         } catch (e: Exception) {
+            Log.e("AuthRepository", "sendResetOtp failed: ${e.message}")
+            AuthResponse.Error("Could not send reset code. Check that the email is correct.")
+        }
+    }
+
+    suspend fun verifyResetOtp(email: String, token: String): AuthResponse {
+        return try {
+            client.auth.verifyEmailOtp(
+                type = OtpType.Email.EMAIL,
+                email = email,
+                token = token
+            )
+            AuthResponse.Success
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "verifyResetOtp failed: ${e.message}")
+            AuthResponse.Error("Invalid or expired code. Please try again.")
+        }
+    }
+
+    suspend fun updatePassword(newPassword: String): AuthResponse {
+        return try {
+            client.auth.updateUser { password = newPassword }
+            try { client.auth.signOut() } catch (_: Exception) {}
+            AuthResponse.Success
+        } catch (e: Exception) {
+            Log.e("AuthRepository", "updatePassword failed: ${e.message}")
             AuthResponse.Error(e.toUserMessage())
         }
     }
