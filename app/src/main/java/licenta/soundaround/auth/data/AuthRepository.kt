@@ -8,6 +8,8 @@ import io.github.jan.supabase.postgrest.from
 import io.github.jan.supabase.storage.storage
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import licenta.soundaround.auth.domain.model.VisibilityMode
@@ -50,41 +52,17 @@ class AuthRepository {
             client.auth.signUpWith(Email) {
                 this.email = email
                 this.password = pass
-            }
-
-            val id = client.auth.currentUserOrNull()?.id
-            Log.d("AuthRepository", "Sign-up auth successful, user id: $id")
-
-            if (id == null) {
-                emit(AuthResponse.Error("Sign-up failed: could not get user ID"))
-                return@flow
-            }
-
-            try {
-                client.auth.retrieveUserForCurrentSession(updateSession = true)
-                Log.d("AuthRepository", "Session retrieved, upserting profile...")
-                client.from("profiles").upsert(
-                    ProfileDto(id = id, username = username, bio = bio, lastFmUsername = lastFmUsername)
-                )
-                Log.d("AuthRepository", "Profile upserted successfully")
-            } catch (e: Exception) {
-                Log.e("AuthRepository", "Profile insert failed: ${e.message}", e)
-                val friendlyMessage = when {
-                    e.message?.contains("username") == true &&
-                    (e.message?.contains("duplicate key") == true || e.message?.contains("unique") == true) ->
-                        "Username already taken. Please choose a different one."
-                    else -> "Account creation failed. Please try again."
+                data = buildJsonObject {
+                    put("username", username)
+                    put("bio", bio)
+                    put("lastfm_username", lastFmUsername)
                 }
-                // Sign out so the partial session doesn't interfere with a retry
-                try { client.auth.signOut() } catch (_: Exception) {}
-                emit(AuthResponse.Error(friendlyMessage))
-                return@flow
             }
 
+            Log.d("AuthRepository", "Sign-up auth successful, profile will be created by DB trigger")
             emit(AuthResponse.Success)
         } catch (e: RestException) {
             Log.d("AuthRepository", "Sign-up failed for $email: ${e.message}, status: ${e.statusCode}")
-            // Sign out in case signUpWith partially created a session
             try { client.auth.signOut() } catch (_: Exception) {}
             emit(AuthResponse.Error(checkSignUpErrors(e)))
         } catch (e: Exception) {
