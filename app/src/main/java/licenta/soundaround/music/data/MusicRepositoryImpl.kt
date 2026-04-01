@@ -6,10 +6,6 @@ import licenta.soundaround.music.ItunesService
 import licenta.soundaround.music.LastFmService
 import licenta.soundaround.music.domain.model.Track
 import licenta.soundaround.music.domain.repository.MusicRepository
-import licenta.soundaround.music.data.LastFmUserDto
-import licenta.soundaround.music.data.TopArtistDto
-import licenta.soundaround.music.data.TopTrackDto
-
 
 class MusicRepositoryImpl(
     private val api: LastFmService,
@@ -47,20 +43,29 @@ class MusicRepositoryImpl(
         }
     }
 
-    override suspend fun getTopArtists(username: String): List<TopArtistDto> {
+    override suspend fun getTopArtists(username: String, limit: Int): List<TopArtistDto> {
         return try {
-            api.getTopArtists(username, BuildConfig.LASTFM_API_KEY).topartists.artist
+            api.getTopArtists(username, BuildConfig.LASTFM_API_KEY, limit).topartists.artist
         } catch (e: Exception) {
             Log.e("MusicRepositoryImpl", "Error fetching top artists: ${e.message}")
             emptyList()
         }
     }
 
-    override suspend fun getTopTracks(username: String): List<TopTrackDto> {
+    override suspend fun getTopTracks(username: String, limit: Int): List<TopTrackDto> {
         return try {
-            api.getTopTracks(username, BuildConfig.LASTFM_API_KEY).toptracks.track
+            api.getTopTracks(username, BuildConfig.LASTFM_API_KEY, limit).toptracks.track
         } catch (e: Exception) {
             Log.e("MusicRepositoryImpl", "Error fetching top tracks: ${e.message}")
+            emptyList()
+        }
+    }
+
+    override suspend fun getArtistTopTags(artist: String): List<ArtistTagDto> {
+        return try {
+            api.getArtistTopTags(artist, BuildConfig.LASTFM_API_KEY).toptags.tag
+        } catch (e: Exception) {
+            Log.e("MusicRepositoryImpl", "Error fetching artist tags: ${e.message}")
             emptyList()
         }
     }

@@ -43,9 +43,37 @@ class MyProfileViewModel(
         private set
     var joinDate by mutableStateOf<String?>(null)
         private set
+    var searchResults by mutableStateOf<List<Pair<String, String>>>(emptyList())
+        private set
+    var isSearching by mutableStateOf(false)
+        private set
+    var friendRequestsSent by mutableStateOf<Set<String>>(emptySet())
+        private set
 
     init {
         load()
+    }
+
+    fun searchUsers(query: String) {
+        if (query.isBlank()) { searchResults = emptyList(); return }
+        viewModelScope.launch {
+            isSearching = true
+            searchResults = socialRepository.searchUsersByUsername(query)
+            isSearching = false
+        }
+    }
+
+    fun clearSearch() {
+        searchResults = emptyList()
+        isSearching = false
+    }
+
+    fun sendFriendRequest(toUserId: String) {
+        viewModelScope.launch {
+            if (socialRepository.sendFriendRequestDirect(toUserId)) {
+                friendRequestsSent = friendRequestsSent + toUserId
+            }
+        }
     }
 
     fun unfriend(userId: String) {

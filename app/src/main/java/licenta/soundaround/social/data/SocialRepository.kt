@@ -152,6 +152,8 @@ class SocialRepository {
             } catch (e: Exception) {
                 Log.e("SocialRepository", "sendMessage content update failed: ${e.message}")
             }
+            // Mark as read for the sender so the conversation doesn't show as unread immediately
+            markRead(conversationId)
             true
         } catch (e: Exception) {
             Log.e("SocialRepository", "sendMessage failed: ${e.message}")
@@ -439,6 +441,54 @@ class SocialRepository {
         } catch (e: Exception) {
             Log.e("SocialRepository", "getFriends failed: ${e.message}")
             emptyList()
+        }
+    }
+
+    suspend fun deleteConversation(conversationId: String): Boolean {
+        return try {
+            val userId = currentUserId() ?: return false
+            client.from("conversations").delete {
+                filter {
+                    eq("id", conversationId)
+                    or {
+                        eq("user_one_id", userId)
+                        eq("user_two_id", userId)
+                    }
+                }
+            }
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "deleteConversation failed: ${e.message}")
+            false
+        }
+    }
+
+    suspend fun searchUsersByUsername(query: String): List<Pair<String, String>> {
+        return try {
+            val myId = currentUserId()
+            client.from("profiles")
+                .select(Columns.raw("id,username")) {
+                    filter { ilike("username", "%${query}%") }
+                }
+                .decodeList<ProfileDto>()
+                .filter { it.id != myId && it.username.isNotBlank() }
+                .map { it.id to it.username }
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "searchUsersByUsername failed: ${e.message}")
+            emptyList()
+        }
+    }
+
+    suspend fun sendFriendRequestDirect(toUserId: String): Boolean {
+        return try {
+            val fromUserId = currentUserId() ?: return false
+            client.from("friendships").insert(
+                FriendshipInsertDto(userId = fromUserId, friendId = toUserId)
+            )
+            true
+        } catch (e: Exception) {
+            Log.e("SocialRepository", "sendFriendRequestDirect failed: ${e.message}")
+            false
         }
     }
 

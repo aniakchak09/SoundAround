@@ -37,6 +37,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.size
@@ -63,7 +64,8 @@ import java.util.TimeZone
 fun ChatScreen(
     viewModel: ChatViewModel,
     otherUsername: String,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onGoToProfile: (() -> Unit)? = null
 ) {
     val context = LocalContext.current
     val listState = rememberLazyListState()
@@ -138,7 +140,9 @@ fun ChatScreen(
         topBar = {
             TopAppBar(
                 title = {
-                    Column {
+                    Column(
+                        modifier = if (onGoToProfile != null) Modifier.clickable { onGoToProfile() } else Modifier
+                    ) {
                         Text("@$otherUsername", fontWeight = FontWeight.SemiBold)
                         when {
                             viewModel.otherIsTyping -> Text(

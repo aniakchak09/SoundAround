@@ -7,6 +7,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -16,6 +18,7 @@ import licenta.soundaround.core.LocationProvider
 import licenta.soundaround.core.SupabaseConfig
 import licenta.soundaround.core.toUserMessage
 import licenta.soundaround.map.data.MapRepository
+import licenta.soundaround.map.data.MatchingRepository
 import licenta.soundaround.map.domain.model.UserLocation
 import licenta.soundaround.music.domain.model.Track
 import licenta.soundaround.music.domain.repository.MusicRepository
@@ -26,7 +29,8 @@ class MapViewModel(
     private val repository: MapRepository,
     private val locationProvider: LocationProvider,
     private val musicRepository: MusicRepository,
-    private val socialRepository: SocialRepository
+    private val socialRepository: SocialRepository,
+    private val matchingRepository: MatchingRepository
 ) : ViewModel() {
 
     var users by mutableStateOf<List<UserLocation>>(emptyList())
@@ -41,7 +45,6 @@ class MapViewModel(
 
     var existingConversation by mutableStateOf<Conversation?>(null)
         private set
-
     var previewUrl by mutableStateOf<String?>(null)
         private set
     var isPreviewLoading by mutableStateOf(false)
@@ -55,6 +58,27 @@ class MapViewModel(
     var selectedUserRecentTracks by mutableStateOf<List<Track>>(emptyList())
         private set
 
+    // Matching
+    var compatibilityScores by mutableStateOf<Map<String, Float>>(emptyMap())
+        private set
+    var isComputingScores by mutableStateOf(false)
+        private set
+    var matchFilter by mutableStateOf(MatchFilter.ALL)
+        private set
+
+    val filteredUsers: List<UserLocation>
+        get() {
+            val sorted = users.sortedByDescending { compatibilityScores[it.userId] ?: -1f }
+            return when (matchFilter) {
+                MatchFilter.ALL -> sorted
+                else -> sorted.filter { user ->
+                    val score = compatibilityScores[user.userId]
+                    score != null && score >= matchFilter.minScore
+                }
+            }
+        }
+
+    private var myLastFmUsername: String? = null
     private var mediaPlayer: MediaPlayer? = null
 
     private val _toastMessage = MutableSharedFlow<String>(extraBufferCapacity = 1)
@@ -62,7 +86,10 @@ class MapViewModel(
 
     init {
         fetchOwnLocation()
-        startRefreshing()
+        viewModelScope.launch {
+            myLastFmUsername = repository.getCurrentUserLastFmUsername()
+            loadUsers()
+        }
     }
 
     private fun fetchOwnLocation() {
@@ -71,23 +98,24 @@ class MapViewModel(
         }
     }
 
-    private fun startRefreshing() {
-        viewModelScope.launch {
-            isLoading = true
+    private suspend fun loadUsers() {
+        isLoading = true
+        try {
+            users = repository.getActiveUsers()
+            computeCompatibilityScores()
+        } catch (e: Exception) {
+            _toastMessage.tryEmit(e.toUserMessage())
+        }
+        isLoading = false
+
+        while (true) {
+            delay(30_000L)
             try {
                 users = repository.getActiveUsers()
+                matchingRepository.clearUserCache()
+                computeCompatibilityScores()
             } catch (e: Exception) {
                 _toastMessage.tryEmit(e.toUserMessage())
-            }
-            isLoading = false
-
-            while (true) {
-                delay(30_000L)
-                try {
-                    users = repository.getActiveUsers()
-                } catch (e: Exception) {
-                    _toastMessage.tryEmit(e.toUserMessage())
-                }
             }
         }
     }
@@ -96,10 +124,39 @@ class MapViewModel(
         viewModelScope.launch {
             try {
                 users = repository.getActiveUsers()
+                matchingRepository.clearUserCache()
+                computeCompatibilityScores()
             } catch (e: Exception) {
                 _toastMessage.tryEmit(e.toUserMessage())
             }
             ownLocation = locationProvider.getLastLocation()
+        }
+    }
+
+    fun setFilter(filter: MatchFilter) {
+        matchFilter = filter
+    }
+
+    private fun computeCompatibilityScores() {
+        val myUsername = myLastFmUsername ?: return
+        val usersWithLastFm = users.filter { !it.lastFmUsername.isNullOrBlank() }
+        if (usersWithLastFm.isEmpty()) return
+
+        viewModelScope.launch {
+            isComputingScores = true
+            val scores = usersWithLastFm
+                .map { user ->
+                    async {
+                        val score = try {
+                            matchingRepository.getCompatibilityScore(myUsername, user.lastFmUsername!!)
+                        } catch (_: Exception) { 0f }
+                        user.userId to score
+                    }
+                }
+                .awaitAll()
+                .toMap()
+            compatibilityScores = scores
+            isComputingScores = false
         }
     }
 

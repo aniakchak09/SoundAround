@@ -10,9 +10,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PersonAdd
 import androidx.compose.material.icons.filled.PersonRemove
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -35,6 +40,65 @@ fun MyProfileScreen(
     onViewFriendProfile: (userId: String, username: String) -> Unit
 ) {
     val profile = viewModel.profile
+    var showAddFriendDialog by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+
+    if (showAddFriendDialog) {
+        AlertDialog(
+            onDismissRequest = {
+                showAddFriendDialog = false
+                searchQuery = ""
+                viewModel.clearSearch()
+            },
+            title = { Text("Add Friend") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(
+                        value = searchQuery,
+                        onValueChange = { searchQuery = it; viewModel.searchUsers(it) },
+                        label = { Text("Search by username") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    if (viewModel.isSearching) {
+                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
+                    }
+                    viewModel.searchResults.forEach { (userId, username) ->
+                        val isFriend = viewModel.friends.any { it.first == userId }
+                        val requestSent = userId in viewModel.friendRequestsSent
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("@$username", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                            when {
+                                isFriend -> Text(
+                                    "Friends",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                                requestSent -> Text(
+                                    "Sent",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                else -> TextButton(onClick = { viewModel.sendFriendRequest(userId) }) {
+                                    Text("Add")
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    showAddFriendDialog = false
+                    searchQuery = ""
+                    viewModel.clearSearch()
+                }) { Text("Close") }
+            }
+        )
+    }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
@@ -152,8 +216,19 @@ fun MyProfileScreen(
         }
 
         // Friends
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text("Friends", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+                IconButton(onClick = { showAddFriendDialog = true }) {
+                    Icon(Icons.Filled.PersonAdd, contentDescription = "Add friend", tint = MaterialTheme.colorScheme.primary)
+                }
+            }
+        }
         if (viewModel.friends.isNotEmpty()) {
-            item { Text("Friends", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
             items(viewModel.friends) { (userId, username) ->
                 Row(
                     modifier = Modifier

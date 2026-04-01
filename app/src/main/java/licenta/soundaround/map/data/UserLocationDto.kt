@@ -25,6 +25,7 @@ fun UserLocationDto.toDomain(): UserLocation? {
     return UserLocation(
         userId = userId,
         username = null,
+        lastFmUsername = null,
         trackName = trackName,
         artistName = artistName,
         albumArt = albumArt,

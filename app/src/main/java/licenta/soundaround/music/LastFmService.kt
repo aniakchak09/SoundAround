@@ -1,5 +1,6 @@
 package licenta.soundaround.music
 
+import licenta.soundaround.music.data.ArtistTopTagsResponse
 import licenta.soundaround.music.data.LastFmResponse
 import licenta.soundaround.music.data.TopArtistsResponse
 import licenta.soundaround.music.data.TopTracksResponse
@@ -30,6 +31,12 @@ interface LastFmService {
         @Query("limit") limit: Int = 6,
         @Query("period") period: String = "overall"
     ): TopTracksResponse
+
+    @GET("?method=artist.gettoptags&format=json&autocorrect=1")
+    suspend fun getArtistTopTags(
+        @Query("artist") artist: String,
+        @Query("api_key") apiKey: String
+    ): ArtistTopTagsResponse
 
     @GET("?method=user.getinfo&format=json")
     suspend fun getUserInfo(

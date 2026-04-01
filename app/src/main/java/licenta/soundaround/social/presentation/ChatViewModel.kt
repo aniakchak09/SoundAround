@@ -172,7 +172,12 @@ class ChatViewModel(
 
     override fun onCleared() {
         super.onCleared()
-        viewModelScope.launch { repository.setTyping(conversationId, false) }
+        viewModelScope.launch {
+            repository.setTyping(conversationId, false)
+            if (messages.isEmpty() && !isPersistent) {
+                repository.deleteConversation(conversationId)
+            }
+        }
     }
 
     fun isMyMessage(message: Message) = message.senderId == currentUserId

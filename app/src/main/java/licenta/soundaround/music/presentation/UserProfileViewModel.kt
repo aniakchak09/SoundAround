@@ -25,6 +25,10 @@ class UserProfileViewModel(
         private set
     var lastFmUsername by mutableStateOf<String?>(null)
         private set
+    var avatarUrl by mutableStateOf<String?>(null)
+        private set
+    var lastSeenAt by mutableStateOf<String?>(null)
+        private set
     var topArtists by mutableStateOf<List<TopArtistDto>>(emptyList())
         private set
     var topTracks by mutableStateOf<List<TopTrackDto>>(emptyList())
@@ -45,13 +49,16 @@ class UserProfileViewModel(
     private fun load() {
         viewModelScope.launch {
             isLoading = true
-            val (profileBio, profileLastFm) = mapRepository.getUserProfileDetails(userId)
-            bio = profileBio
-            lastFmUsername = profileLastFm
+            val info = mapRepository.getUserProfileDetails(userId)
+            bio = info.bio
+            lastFmUsername = info.lastFmUsername
+            avatarUrl = info.avatarUrl
+            lastSeenAt = info.lastSeenAt
 
-            if (!profileLastFm.isNullOrBlank()) {
+            val lfm = info.lastFmUsername
+            if (!lfm.isNullOrBlank()) {
                 launch {
-                    val tracks = musicRepository.getTopTracks(profileLastFm)
+                    val tracks = musicRepository.getTopTracks(lfm)
                     topTracks = tracks
                     trackImages = tracks
                         .map { t -> async { "${t.name}_${t.artist.name}" to musicRepository.getTrackImageUrl(t.artist.name, t.name) } }
@@ -59,9 +66,9 @@ class UserProfileViewModel(
                         .mapNotNull { (key, url) -> url?.let { key to it } }
                         .toMap()
                 }
-                launch { recentTracks = musicRepository.getRecentTracks(profileLastFm, 10) }
+                launch { recentTracks = musicRepository.getRecentTracks(lfm, 10) }
                 launch {
-                    val artists = musicRepository.getTopArtists(profileLastFm)
+                    val artists = musicRepository.getTopArtists(lfm)
                     topArtists = artists
                     artistImages = artists
                         .map { artist -> async { artist.name to musicRepository.getArtistImageUrl(artist.name) } }

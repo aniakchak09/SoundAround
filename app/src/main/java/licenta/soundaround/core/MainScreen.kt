@@ -33,6 +33,7 @@ import licenta.soundaround.auth.data.AuthRepository
 import licenta.soundaround.auth.presentation.MyProfileScreen
 import licenta.soundaround.auth.presentation.MyProfileViewModel
 import licenta.soundaround.map.data.MapRepository
+import licenta.soundaround.map.data.MatchingRepository
 import licenta.soundaround.map.presentation.MapScreen
 import licenta.soundaround.map.presentation.MapViewModel
 import licenta.soundaround.music.domain.repository.MusicRepository
@@ -61,6 +62,7 @@ fun MainScreen(
     presenceRepository: PresenceRepository,
     mapRepository: MapRepository,
     socialRepository: SocialRepository,
+    matchingRepository: MatchingRepository,
     onNavToProfile: () -> Unit,
     onSignOut: () -> Unit
 ) {
@@ -146,7 +148,7 @@ fun MainScreen(
                 val vm: MapViewModel = viewModel(
                     factory = object : ViewModelProvider.Factory {
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return MapViewModel(mapRepository, AppContainer.locationProvider, trackRepository, socialRepository) as T
+                            return MapViewModel(mapRepository, AppContainer.locationProvider, trackRepository, socialRepository, matchingRepository) as T
                         }
                     }
                 )
@@ -296,7 +298,10 @@ fun MainScreen(
                 ChatScreen(
                     viewModel = vm,
                     otherUsername = otherUsername,
-                    onBack = { innerNav.popBackStack() }
+                    onBack = { innerNav.popBackStack() },
+                    onGoToProfile = if (otherUserId.isNotBlank()) {
+                        { innerNav.navigate("user_profile/$otherUserId?username=$otherUsername") }
+                    } else null
                 )
             }
         }

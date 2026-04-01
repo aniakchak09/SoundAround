@@ -13,13 +13,27 @@ import licenta.soundaround.map.domain.model.UserLocation
 private data class PrivacyProfileDto(
     val id: String,
     val username: String? = null,
-    @SerialName("privacy_mode") val privacyMode: VisibilityMode? = VisibilityMode.PUBLIC
+    @SerialName("privacy_mode") val privacyMode: VisibilityMode? = VisibilityMode.PUBLIC,
+    @SerialName("lastfm_username") val lastFmUsername: String? = null
 )
 
 @Serializable
 private data class UserProfileDetailsDto(
     val bio: String? = null,
-    @SerialName("lastfm_username") val lastFmUsername: String? = null
+    @SerialName("lastfm_username") val lastFmUsername: String? = null,
+    @SerialName("avatar_url") val avatarUrl: String? = null
+)
+
+@Serializable
+private data class LocationsLastSeenDto(
+    @SerialName("last_seen_at") val lastSeenAt: String? = null
+)
+
+data class UserProfileInfo(
+    val bio: String?,
+    val lastFmUsername: String?,
+    val avatarUrl: String?,
+    val lastSeenAt: String?
 )
 
 @Serializable
@@ -46,7 +60,7 @@ class MapRepository {
         if (userIds.isEmpty()) return emptyList()
 
         val profiles = client.from("profiles")
-            .select(Columns.raw("id,username,privacy_mode")) {
+            .select(Columns.raw("id,username,privacy_mode,lastfm_username")) {
                 filter { isIn("id", userIds) }
             }
             .decodeList<PrivacyProfileDto>()
@@ -62,7 +76,25 @@ class MapRepository {
                     VisibilityMode.INVISIBLE -> false
                 }
             }
-            .map { user -> user.copy(username = profiles[user.userId]?.username?.takeIf { it.isNotBlank() }) }
+            .map { user ->
+                user.copy(
+                    username = profiles[user.userId]?.username?.takeIf { it.isNotBlank() },
+                    lastFmUsername = profiles[user.userId]?.lastFmUsername?.takeIf { it.isNotBlank() }
+                )
+            }
+    }
+
+    suspend fun getCurrentUserLastFmUsername(): String? {
+        val userId = client.auth.currentUserOrNull()?.id ?: return null
+        return try {
+            client.from("profiles")
+                .select(Columns.raw("lastfm_username")) {
+                    filter { eq("id", userId) }
+                }
+                .decodeSingleOrNull<UserProfileDetailsDto>()
+                ?.lastFmUsername
+                ?.takeIf { it.isNotBlank() }
+        } catch (_: Exception) { null }
     }
 
     private suspend fun getFriendIds(userId: String): Set<String> {
@@ -87,19 +119,29 @@ class MapRepository {
         }
     }
 
-    suspend fun getUserProfileDetails(userId: String): Pair<String?, String?> {
+    suspend fun getUserProfileDetails(userId: String): UserProfileInfo {
         return try {
             val dto = client.from("profiles")
-                .select(Columns.raw("bio,lastfm_username")) {
+                .select(Columns.raw("bio,lastfm_username,avatar_url")) {
                     filter { eq("id", userId) }
                 }
                 .decodeSingleOrNull<UserProfileDetailsDto>()
-            Pair(
-                dto?.bio?.takeIf { it.isNotBlank() },
-                dto?.lastFmUsername?.takeIf { it.isNotBlank() }
+            val lastSeenAt = try {
+                client.from("locations")
+                    .select(Columns.raw("last_seen_at")) {
+                        filter { eq("user_id", userId) }
+                    }
+                    .decodeSingleOrNull<LocationsLastSeenDto>()
+                    ?.lastSeenAt
+            } catch (_: Exception) { null }
+            UserProfileInfo(
+                bio = dto?.bio?.takeIf { it.isNotBlank() },
+                lastFmUsername = dto?.lastFmUsername?.takeIf { it.isNotBlank() },
+                avatarUrl = dto?.avatarUrl?.takeIf { it.isNotBlank() },
+                lastSeenAt = lastSeenAt
             )
         } catch (e: Exception) {
-            Pair(null, null)
+            UserProfileInfo(null, null, null, null)
         }
     }
 

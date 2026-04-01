@@ -36,6 +36,7 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -90,6 +91,7 @@ fun MapScreen(
 ) {
     val context = LocalContext.current
     val lifecycleOwner = LocalLifecycleOwner.current
+    val filteredUsers = viewModel.filteredUsers
 
     var locationPermissionGranted by remember {
         mutableStateOf(
@@ -111,7 +113,6 @@ fun MapScreen(
     MapLibre.getInstance(context)
     val mapView = remember { MapView(context) }
     val mapRef = remember { mutableStateOf<MapLibreMap?>(null) }
-    val users = viewModel.users
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     var showNearbyDropdown by remember { mutableStateOf(false) }
 
@@ -146,11 +147,11 @@ fun MapScreen(
             .build()
     }
 
-    LaunchedEffect(mapRef.value, users, viewModel.ownLocation) {
+    LaunchedEffect(mapRef.value, viewModel.users, viewModel.ownLocation) {
         val map = mapRef.value ?: return@LaunchedEffect
         val markerMap = updateMarkers(
             map = map,
-            users = users,
+            users = viewModel.users,
             currentUserId = viewModel.currentUserId,
             ownLocation = viewModel.ownLocation,
             context = context
@@ -181,11 +182,12 @@ fun MapScreen(
                 .statusBarsPadding()
                 .padding(start = 16.dp, top = 12.dp)
         ) {
+            // Nearby pill
             Surface(
                 shape = RoundedCornerShape(50),
                 shadowElevation = 4.dp,
                 color = MaterialTheme.colorScheme.surface,
-                modifier = Modifier.clickable(enabled = users.isNotEmpty()) {
+                modifier = Modifier.clickable(enabled = viewModel.users.isNotEmpty()) {
                     showNearbyDropdown = true
                 }
             ) {
@@ -201,44 +203,101 @@ fun MapScreen(
                     )
                     Spacer(modifier = Modifier.width(6.dp))
                     Text(
-                        text = if (users.isEmpty()) "No listeners nearby"
-                        else "${users.size} listener${if (users.size != 1) "s" else ""} nearby",
+                        text = when {
+                            viewModel.users.isEmpty() -> "No listeners nearby"
+                            viewModel.matchFilter != MatchFilter.ALL ->
+                                "${filteredUsers.size}/${viewModel.users.size} listeners"
+                            else -> "${viewModel.users.size} listener${if (viewModel.users.size != 1) "s" else ""} nearby"
+                        },
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold
                     )
+                    if (viewModel.isComputingScores) {
+                        Spacer(Modifier.width(8.dp))
+                        CircularProgressIndicator(modifier = Modifier.size(12.dp), strokeWidth = 2.dp)
+                    }
                 }
             }
 
+            // Dropdown — filter chips at the top, then the user list
             DropdownMenu(
                 expanded = showNearbyDropdown,
                 onDismissRequest = { showNearbyDropdown = false }
             ) {
-                users.forEach { user ->
+                // Filter chips row
+                Row(
+                    modifier = Modifier
+                        .padding(horizontal = 8.dp, vertical = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    MatchFilter.entries.forEach { filter ->
+                        FilterChip(
+                            selected = viewModel.matchFilter == filter,
+                            onClick = { viewModel.setFilter(filter) },
+                            label = {
+                                Text(filter.label, style = MaterialTheme.typography.labelSmall)
+                            }
+                        )
+                    }
+                }
+                if (filteredUsers.isEmpty()) {
                     DropdownMenuItem(
                         text = {
-                            Column {
-                                Text(
-                                    text = "@${user.username ?: user.userId}",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                                if (user.trackName != null) {
-                                    Text(
-                                        text = "${if (user.isPlaying) "▶ " else ""}${user.trackName}",
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                }
-                            }
+                            Text(
+                                "No users match this filter",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         },
-                        onClick = {
-                            showNearbyDropdown = false
-                            mapRef.value?.cameraPosition = CameraPosition.Builder()
-                                .target(LatLng(user.lat, user.lng))
-                                .zoom(15.0)
-                                .build()
-                        }
+                        onClick = { showNearbyDropdown = false }
                     )
+                } else {
+                    filteredUsers.forEach { user ->
+                        val score = viewModel.compatibilityScores[user.userId]
+                        DropdownMenuItem(
+                            text = {
+                                Row(
+                                    modifier = Modifier.fillMaxWidth(),
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Column(modifier = Modifier.weight(1f)) {
+                                        Text(
+                                            text = "@${user.username ?: user.userId}",
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                        if (user.trackName != null) {
+                                            Text(
+                                                text = "${if (user.isPlaying) "▶ " else ""}${user.trackName}",
+                                                style = MaterialTheme.typography.bodySmall,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                    if (score != null) {
+                                        Spacer(Modifier.width(8.dp))
+                                        Text(
+                                            text = "${(score * 100).toInt()}%",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            fontWeight = FontWeight.Bold,
+                                            color = when {
+                                                score >= 0.55f -> MaterialTheme.colorScheme.primary
+                                                score >= 0.30f -> MaterialTheme.colorScheme.secondary
+                                                else -> MaterialTheme.colorScheme.onSurfaceVariant
+                                            }
+                                        )
+                                    }
+                                }
+                            },
+                            onClick = {
+                                showNearbyDropdown = false
+                                mapRef.value?.cameraPosition = CameraPosition.Builder()
+                                    .target(LatLng(user.lat, user.lng))
+                                    .zoom(15.0)
+                                    .build()
+                            }
+                        )
+                    }
                 }
             }
         }

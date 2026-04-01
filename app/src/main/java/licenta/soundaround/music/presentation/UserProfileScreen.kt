@@ -40,6 +40,9 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
 import licenta.soundaround.music.data.TopArtistDto
+import java.text.SimpleDateFormat
+import java.util.Locale
+import java.util.TimeZone
 import licenta.soundaround.music.data.TopTrackDto
 import licenta.soundaround.music.domain.model.Track
 
@@ -77,18 +80,30 @@ fun UserProfileScreen(
             // Header
             item {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(64.dp)
-                            .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            Icons.Filled.Person,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.size(36.dp)
-                        )
+                    Box(modifier = Modifier.size(64.dp)) {
+                        if (!viewModel.avatarUrl.isNullOrBlank()) {
+                            AsyncImage(
+                                model = viewModel.avatarUrl,
+                                contentDescription = null,
+                                contentScale = ContentScale.Crop,
+                                modifier = Modifier.fillMaxSize().clip(CircleShape)
+                            )
+                        } else {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                val letter = viewModel.displayUsername.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
+                                Text(
+                                    letter,
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer
+                                )
+                            }
+                        }
                     }
                     Spacer(Modifier.width(16.dp))
                     Column {
@@ -111,6 +126,16 @@ fun UserProfileScreen(
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
+                        }
+                        viewModel.lastSeenAt?.let { ts ->
+                            val label = lastSeenLabel(ts)
+                            if (label != null) {
+                                Text(
+                                    label,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                )
+                            }
                         }
                     }
                 }
@@ -158,6 +183,23 @@ fun UserProfileScreen(
             }
         }
     }
+}
+
+private fun lastSeenLabel(timestamp: String): String? {
+    return try {
+        val sdf = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", Locale.US)
+        sdf.timeZone = TimeZone.getTimeZone("UTC")
+        val clean = timestamp.substringBefore("+").trimEnd('Z').substringBefore(".")
+        val date = sdf.parse(clean) ?: return null
+        val diff = System.currentTimeMillis() - date.time
+        val ago = when {
+            diff < 60_000 -> "just now"
+            diff < 3_600_000 -> "${diff / 60_000}m ago"
+            diff < 86_400_000 -> "${diff / 3_600_000}h ago"
+            else -> "${diff / 86_400_000}d ago"
+        }
+        "Last seen $ago"
+    } catch (_: Exception) { null }
 }
 
 @Composable

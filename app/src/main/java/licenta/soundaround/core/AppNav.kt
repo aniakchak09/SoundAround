@@ -16,6 +16,7 @@ import licenta.soundaround.auth.presentation.LoginScreen
 import licenta.soundaround.auth.presentation.ManageProfileScreen
 import licenta.soundaround.auth.presentation.SignUpScreen
 import licenta.soundaround.map.data.MapRepository
+import licenta.soundaround.map.data.MatchingRepository
 import licenta.soundaround.music.RetrofitClient
 import licenta.soundaround.music.RetrofitItunesClient
 import licenta.soundaround.music.data.MusicRepositoryImpl
@@ -41,6 +42,8 @@ object AppContainer {
     val mapRepository: MapRepository by lazy { MapRepository() }
 
     val socialRepository: SocialRepository by lazy { SocialRepository() }
+
+    val matchingRepository: MatchingRepository by lazy { MatchingRepository(trackRepository) }
 }
 
 @Composable
@@ -80,6 +83,7 @@ fun AppNav() {
                     presenceRepository = AppContainer.presenceRepository,
                     mapRepository = AppContainer.mapRepository,
                     socialRepository = AppContainer.socialRepository,
+                    matchingRepository = AppContainer.matchingRepository,
                     onNavToProfile = { navController.navigate(Screen.Profile.route) },
                     onSignOut = {
                         navController.navigate(Screen.Login.route) {
