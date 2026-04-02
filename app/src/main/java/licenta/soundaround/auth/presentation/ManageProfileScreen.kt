@@ -233,8 +233,11 @@ fun ManageProfileScreen(
                     val bioRes = authRepo.updateBio(bio)
                     if (!bioRes) allSuccessful = false
                     if (lastFmUsername.isNotBlank()) {
-                        val lastFmRes = authRepo.updateLastFm(lastFmUsername)
-                        if (!lastFmRes) allSuccessful = false
+                        val lastFmError = authRepo.updateLastFm(lastFmUsername)
+                        if (lastFmError != null) {
+                            Toast.makeText(context, lastFmError, Toast.LENGTH_LONG).show()
+                            allSuccessful = false
+                        }
                     }
                     if (allSuccessful) {
                         authRepo.updateVisibilityMode(visibilityMode)

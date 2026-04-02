@@ -280,23 +280,23 @@ class AuthRepository {
         }
     }
 
-    suspend fun updateLastFm(lastFmUsername: String): Boolean {
+    suspend fun updateLastFm(lastFmUsername: String): String? {
         return try {
-            val id = client.auth.currentUserOrNull()?.id
-            if (id != null) {
-                client.from("profiles").update({
-                    set("lastfm_username", lastFmUsername)
-                }) {
-                    filter { eq("id", id) }
-                }
-                true
-            } else {
-                Log.e("Auth", "No user logged in to update Last.fm")
-                false
+            val id = client.auth.currentUserOrNull()?.id ?: return "Not logged in."
+            client.from("profiles").update({
+                set("lastfm_username", lastFmUsername)
+            }) {
+                filter { eq("id", id) }
             }
+            null
         } catch (e: Exception) {
             Log.e("Auth", "Update Last.fm failed", e)
-            false
+            if (e.message?.contains("unique", ignoreCase = true) == true ||
+                e.message?.contains("duplicate", ignoreCase = true) == true) {
+                "That last.fm username is already linked to another account."
+            } else {
+                "Failed to update last.fm username. Try again."
+            }
         }
     }
 }

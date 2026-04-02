@@ -21,7 +21,8 @@ private data class PrivacyProfileDto(
 private data class UserProfileDetailsDto(
     val bio: String? = null,
     @SerialName("lastfm_username") val lastFmUsername: String? = null,
-    @SerialName("avatar_url") val avatarUrl: String? = null
+    @SerialName("avatar_url") val avatarUrl: String? = null,
+    @SerialName("privacy_mode") val privacyMode: VisibilityMode? = VisibilityMode.PUBLIC
 )
 
 @Serializable
@@ -122,7 +123,7 @@ class MapRepository {
     suspend fun getUserProfileDetails(userId: String): UserProfileInfo {
         return try {
             val dto = client.from("profiles")
-                .select(Columns.raw("bio,lastfm_username,avatar_url")) {
+                .select(Columns.raw("bio,lastfm_username,avatar_url,privacy_mode")) {
                     filter { eq("id", userId) }
                 }
                 .decodeSingleOrNull<UserProfileDetailsDto>()
@@ -134,9 +135,21 @@ class MapRepository {
                     .decodeSingleOrNull<LocationsLastSeenDto>()
                     ?.lastSeenAt
             } catch (_: Exception) { null }
+
+            val currentUserId = client.auth.currentUserOrNull()?.id
+            val privacyMode = dto?.privacyMode ?: VisibilityMode.PUBLIC
+            val showLastFm = when (privacyMode) {
+                VisibilityMode.PUBLIC -> true
+                VisibilityMode.FRIENDS_ONLY,
+                VisibilityMode.INVISIBLE -> {
+                    if (currentUserId == null) false
+                    else currentUserId == userId || getFriendIds(currentUserId).contains(userId)
+                }
+            }
+
             UserProfileInfo(
                 bio = dto?.bio?.takeIf { it.isNotBlank() },
-                lastFmUsername = dto?.lastFmUsername?.takeIf { it.isNotBlank() },
+                lastFmUsername = dto?.lastFmUsername?.takeIf { it.isNotBlank() && showLastFm },
                 avatarUrl = dto?.avatarUrl?.takeIf { it.isNotBlank() },
                 lastSeenAt = lastSeenAt
             )

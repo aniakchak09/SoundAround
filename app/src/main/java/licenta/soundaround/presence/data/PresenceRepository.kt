@@ -29,11 +29,17 @@ class PresenceRepository {
                     isPlaying = track.isNowPlaying,
                     syncedAt = now,
                     lat = lat,
-                    lng = lng,
-                    lastSeenAt = if (lat != null && lng != null) now else null
+                    lng = lng
                 )
             ) {
                 onConflict = "user_id"
+            }
+            // Only update last_seen_at when GPS is available — never overwrite it with null
+            if (lat != null && lng != null) {
+                client.from("locations")
+                    .update({ set("last_seen_at", now) }) {
+                        filter { eq("user_id", userId) }
+                    }
             }
             Log.d("PresenceRepository", "Published: ${track.title} by ${track.artist} @ $lat,$lng")
             true

@@ -9,22 +9,20 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PersonAdd
-import androidx.compose.material.icons.filled.PersonRemove
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import licenta.soundaround.music.data.TopArtistDto
 import licenta.soundaround.music.data.TopTrackDto
@@ -37,82 +35,49 @@ fun MyProfileScreen(
     viewModel: MyProfileViewModel,
     onEditProfile: () -> Unit,
     onSignOut: () -> Unit,
-    onViewFriendProfile: (userId: String, username: String) -> Unit
+    onViewFriendProfile: (userId: String, username: String) -> Unit,
+    onGoToFriends: () -> Unit
 ) {
     val profile = viewModel.profile
-    var showAddFriendDialog by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
+    var showAvatarDialog by remember { mutableStateOf(false) }
 
-    if (showAddFriendDialog) {
-        AlertDialog(
-            onDismissRequest = {
-                showAddFriendDialog = false
-                searchQuery = ""
-                viewModel.clearSearch()
-            },
-            title = { Text("Add Friend") },
-            text = {
-                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(
-                        value = searchQuery,
-                        onValueChange = { searchQuery = it; viewModel.searchUsers(it) },
-                        label = { Text("Search by username") },
-                        singleLine = true,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                    if (viewModel.isSearching) {
-                        CircularProgressIndicator(modifier = Modifier.align(Alignment.CenterHorizontally))
-                    }
-                    viewModel.searchResults.forEach { (userId, username) ->
-                        val isFriend = viewModel.friends.any { it.first == userId }
-                        val requestSent = userId in viewModel.friendRequestsSent
-                        Row(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text("@$username", modifier = Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
-                            when {
-                                isFriend -> Text(
-                                    "Friends",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                                requestSent -> Text(
-                                    "Sent",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                                else -> TextButton(onClick = { viewModel.sendFriendRequest(userId) }) {
-                                    Text("Add")
-                                }
-                            }
-                        }
-                    }
-                }
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    showAddFriendDialog = false
-                    searchQuery = ""
-                    viewModel.clearSearch()
-                }) { Text("Close") }
+    if (showAvatarDialog && !profile?.avatarUrl.isNullOrBlank()) {
+        Dialog(onDismissRequest = { showAvatarDialog = false }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showAvatarDialog = false },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = profile!!.avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                )
             }
-        )
+        }
     }
 
     LazyColumn(
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(24.dp)
+        contentPadding = PaddingValues(bottom = 24.dp)
     ) {
-        // Header
+        // Header — centered, large avatar
         item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                verticalAlignment = Alignment.CenterVertically
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 24.dp, vertical = 28.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                // Avatar
-                Box(modifier = Modifier.size(80.dp)) {
+                Box(
+                    modifier = Modifier
+                        .size(100.dp)
+                        .clickable(enabled = !profile?.avatarUrl.isNullOrBlank()) { showAvatarDialog = true }
+                ) {
                     if (!profile?.avatarUrl.isNullOrBlank()) {
                         AsyncImage(
                             model = profile!!.avatarUrl,
@@ -128,47 +93,117 @@ fun MyProfileScreen(
                                 .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
                             contentAlignment = Alignment.Center
                         ) {
-                            Text(letter, style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer)
-                        }
-                    }
-                }
-                Spacer(Modifier.width(16.dp))
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        "@${profile?.username ?: ""}",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold
-                    )
-                    if (!profile?.bio.isNullOrBlank()) {
-                        Text(
-                            profile!!.bio!!,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                    viewModel.joinDate?.let { dateStr ->
-                        val formatted = formatJoinDate(dateStr)
-                        if (formatted != null) {
                             Text(
-                                "Joined $formatted",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                                letter,
+                                style = MaterialTheme.typography.headlineLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                         }
                     }
                 }
-                IconButton(onClick = onEditProfile) {
-                    Icon(Icons.Filled.Person, contentDescription = "Edit profile",
-                        tint = MaterialTheme.colorScheme.primary)
+
+                Spacer(Modifier.height(14.dp))
+
+                Text(
+                    "@${profile?.username ?: ""}",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+
+                if (!profile?.bio.isNullOrBlank()) {
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        profile!!.bio!!,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        textAlign = TextAlign.Center
+                    )
+                }
+
+                viewModel.joinDate?.let { dateStr ->
+                    val formatted = formatJoinDate(dateStr)
+                    if (formatted != null) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            "Joined $formatted",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.height(16.dp))
+
+                OutlinedButton(
+                    onClick = onEditProfile,
+                    shape = RoundedCornerShape(50),
+                    modifier = Modifier.height(36.dp)
+                ) {
+                    Icon(Icons.Filled.Edit, contentDescription = null, modifier = Modifier.size(14.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Edit Profile", style = MaterialTheme.typography.labelMedium)
                 }
             }
+        }
+
+        // Friends card — right after header
+        item {
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .clickable { onGoToFriends() },
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(
+                        Icons.Filled.Group,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                    Spacer(Modifier.width(12.dp))
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            "Friends",
+                            style = MaterialTheme.typography.bodyLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                        )
+                        val pendingCount = viewModel.pendingRequests.size
+                        val subtitle = buildString {
+                            append("${viewModel.friends.size} friend${if (viewModel.friends.size != 1) "s" else ""}")
+                            if (pendingCount > 0) append(" · $pendingCount pending")
+                        }
+                        Text(
+                            subtitle,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                        )
+                    }
+                    Icon(
+                        Icons.Filled.ArrowForward,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.6f)
+                    )
+                }
+            }
+            Spacer(Modifier.height(20.dp))
         }
 
         // Last.fm stats card
         viewModel.lastFmInfo?.let { info ->
             item {
                 Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
                 ) {
@@ -180,109 +215,78 @@ fun MyProfileScreen(
                         if (!profile?.lastFmUsername.isNullOrBlank()) {
                             StatItem(label = "last.fm", value = "@${profile!!.lastFmUsername}")
                         }
-                        StatItem(label = "Friends", value = viewModel.friends.size.toString())
                     }
                 }
+                Spacer(Modifier.height(24.dp))
             }
         }
 
         // Top Artists
         if (viewModel.topArtists.isNotEmpty()) {
             item {
-                Text("Top Artists", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                Spacer(Modifier.height(8.dp))
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionLabel("Top Artists")
+                Spacer(Modifier.height(10.dp))
+                LazyRow(
+                    contentPadding = PaddingValues(horizontal = 16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
                     items(viewModel.topArtists) { artist ->
                         ArtistItem(artist, viewModel.artistImages[artist.name])
                     }
                 }
+                Spacer(Modifier.height(24.dp))
             }
         }
 
         // Top Tracks
         if (viewModel.topTracks.isNotEmpty()) {
-            item { Text("Top Tracks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            item { SectionLabel("Top Tracks") }
             items(viewModel.topTracks) { track ->
-                TopTrackItem(track, viewModel.trackImages["${track.name}_${track.artist.name}"])
+                TopTrackItem(
+                    track,
+                    viewModel.trackImages["${track.name}_${track.artist.name}"],
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
             }
+            item { Spacer(Modifier.height(16.dp)) }
         }
 
         // Recent Tracks
         if (viewModel.recentTracks.isNotEmpty()) {
-            item { Text("Recent Tracks", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold) }
+            item { SectionLabel("Recent Tracks") }
             items(viewModel.recentTracks) { track ->
-                RecentTrackItem(track)
+                RecentTrackItem(track, modifier = Modifier.padding(horizontal = 16.dp))
             }
+            item { Spacer(Modifier.height(16.dp)) }
         }
 
-        // Friends
-        item {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Text("Friends", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
-                IconButton(onClick = { showAddFriendDialog = true }) {
-                    Icon(Icons.Filled.PersonAdd, contentDescription = "Add friend", tint = MaterialTheme.colorScheme.primary)
-                }
-            }
-        }
-        if (viewModel.friends.isNotEmpty()) {
-            items(viewModel.friends) { (userId, username) ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .clickable { onViewFriendProfile(userId, username) }
-                        .padding(vertical = 8.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .background(MaterialTheme.colorScheme.secondaryContainer, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            username.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer
-                        )
-                    }
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        "@$username",
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    IconButton(onClick = { viewModel.unfriend(userId) }) {
-                        Icon(
-                            Icons.Filled.PersonRemove,
-                            contentDescription = "Unfriend",
-                            tint = MaterialTheme.colorScheme.error,
-                            modifier = Modifier.size(20.dp)
-                        )
-                    }
-                }
-            }
-        }
-
+        // Sign out
         item {
             Spacer(Modifier.height(8.dp))
             OutlinedButton(
                 onClick = onSignOut,
                 shape = RoundedCornerShape(50),
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp)
+                    .height(48.dp),
                 colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                 border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.error)
             ) {
                 Text("Sign Out")
             }
-            Spacer(Modifier.height(16.dp))
         }
     }
+}
+
+@Composable
+private fun SectionLabel(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleMedium,
+        fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp)
+    )
 }
 
 @Composable
@@ -332,14 +336,18 @@ private fun ArtistItem(artist: TopArtistDto, imageUrl: String?) {
 }
 
 @Composable
-private fun TopTrackItem(track: TopTrackDto, imageUrl: String?) {
+private fun TopTrackItem(track: TopTrackDto, imageUrl: String?, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (imageUrl != null) {
-            AsyncImage(model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop,
-                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp)))
+            AsyncImage(
+                model = imageUrl, contentDescription = null, contentScale = ContentScale.Crop,
+                modifier = Modifier.size(44.dp).clip(RoundedCornerShape(6.dp))
+            )
             Spacer(Modifier.width(12.dp))
         }
         Column(Modifier.weight(1f)) {
@@ -354,9 +362,11 @@ private fun TopTrackItem(track: TopTrackDto, imageUrl: String?) {
 }
 
 @Composable
-private fun RecentTrackItem(track: Track) {
+private fun RecentTrackItem(track: Track, modifier: Modifier = Modifier) {
     Row(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        modifier = modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         if (track.imageUrl.isNotBlank()) {

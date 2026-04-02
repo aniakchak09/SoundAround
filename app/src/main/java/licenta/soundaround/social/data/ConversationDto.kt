@@ -45,6 +45,7 @@ data class ConversationDto(
 
 @Serializable
 data class ConversationInsertDto(
+    val id: String? = null,
     @SerialName("user_one_id") val userOneId: String,
     @SerialName("user_two_id") val userTwoId: String,
     @SerialName("is_persistent") val isPersistent: Boolean,

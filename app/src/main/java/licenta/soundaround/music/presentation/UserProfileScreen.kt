@@ -1,6 +1,7 @@
 package licenta.soundaround.music.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +32,10 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,6 +43,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.window.Dialog
 import coil.compose.AsyncImage
 import licenta.soundaround.music.data.TopArtistDto
 import java.text.SimpleDateFormat
@@ -52,6 +58,28 @@ fun UserProfileScreen(
     viewModel: UserProfileViewModel,
     onBack: () -> Unit
 ) {
+    var showAvatarDialog by remember { mutableStateOf(false) }
+
+    if (showAvatarDialog && !viewModel.avatarUrl.isNullOrBlank()) {
+        Dialog(onDismissRequest = { showAvatarDialog = false }) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showAvatarDialog = false },
+                contentAlignment = Alignment.Center
+            ) {
+                AsyncImage(
+                    model = viewModel.avatarUrl,
+                    contentDescription = null,
+                    contentScale = ContentScale.Fit,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(16.dp))
+                )
+            }
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -79,8 +107,15 @@ fun UserProfileScreen(
         ) {
             // Header
             item {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(modifier = Modifier.size(64.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(80.dp)
+                            .clickable(enabled = !viewModel.avatarUrl.isNullOrBlank()) { showAvatarDialog = true }
+                    ) {
                         if (!viewModel.avatarUrl.isNullOrBlank()) {
                             AsyncImage(
                                 model = viewModel.avatarUrl,
@@ -98,7 +133,7 @@ fun UserProfileScreen(
                                 val letter = viewModel.displayUsername.firstOrNull()?.uppercaseChar()?.toString() ?: "?"
                                 Text(
                                     letter,
-                                    style = MaterialTheme.typography.titleLarge,
+                                    style = MaterialTheme.typography.headlineMedium,
                                     fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onPrimaryContainer
                                 )

@@ -4,7 +4,8 @@
       "Bash(git -C /d/ai_nevoie_de_ele/cursuri/licenta/app_v2 log --oneline --all)",
       "Bash(git -C /d/ai_nevoie_de_ele/cursuri/licenta/app_v2 log -p --follow -- local.properties)",
       "Bash(git -C /d/ai_nevoie_de_ele/cursuri/licenta/app_v2 ls-files)",
-      "Bash(find D:ai_nevoie_de_elecursurilicentaapp_v2 -type f \\\\\\(-name *.md -o -name *.txt -o -name *.sql \\\\\\))"
+      "Bash(find D:ai_nevoie_de_elecursurilicentaapp_v2 -type f \\\\\\(-name *.md -o -name *.txt -o -name *.sql \\\\\\))",
+      "Bash(python3:*)"
     ]
   }
 }

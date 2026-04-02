@@ -12,6 +12,5 @@ data class PresenceDto(
     @SerialName("is_playing") val isPlaying: Boolean,
     @SerialName("synced_at") val syncedAt: String,
     val lat: Double? = null,
-    val lng: Double? = null,
-    @SerialName("last_seen_at") val lastSeenAt: String? = null
+    val lng: Double? = null
 )

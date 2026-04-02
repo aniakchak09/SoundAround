@@ -30,6 +30,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import kotlinx.coroutines.launch
 import licenta.soundaround.auth.data.AuthRepository
+import licenta.soundaround.auth.presentation.FriendsScreen
 import licenta.soundaround.auth.presentation.MyProfileScreen
 import licenta.soundaround.auth.presentation.MyProfileViewModel
 import licenta.soundaround.map.data.MapRepository
@@ -52,8 +53,9 @@ private const val TAB_NOW_PLAYING = "now_playing"
 private const val TAB_MAP = "map"
 private const val TAB_CHATS = "chats"
 private const val TAB_PROFILE = "profile_tab"
-private const val SCREEN_CHAT = "chat/{conversationId}?otherUsername={otherUsername}&isPersistent={isPersistent}&otherUserId={otherUserId}&myTrack={myTrack}&myArtist={myArtist}&theirTrack={theirTrack}&theirArtist={theirArtist}"
+private const val SCREEN_CHAT = "chat/{conversationId}?otherUsername={otherUsername}&isPersistent={isPersistent}&otherUserId={otherUserId}&myTrack={myTrack}&myArtist={myArtist}&theirTrack={theirTrack}&theirArtist={theirArtist}&isPendingPing={isPendingPing}"
 private const val SCREEN_USER_PROFILE = "user_profile/{userId}?username={username}"
+private const val SCREEN_FRIENDS = "friends"
 
 @Composable
 fun MainScreen(
@@ -76,6 +78,14 @@ fun MainScreen(
         factory = object : ViewModelProvider.Factory {
             override fun <T : ViewModel> create(modelClass: Class<T>): T {
                 return ConversationsViewModel(socialRepository) as T
+            }
+        }
+    )
+
+    val profileVm: MyProfileViewModel = viewModel(
+        factory = object : ViewModelProvider.Factory {
+            override fun <T : ViewModel> create(modelClass: Class<T>): T {
+                return MyProfileViewModel(authRepo, AppContainer.trackRepository, socialRepository) as T
             }
         }
     )
@@ -116,7 +126,15 @@ fun MainScreen(
                     NavigationBarItem(
                         selected = currentRoute == TAB_PROFILE,
                         onClick = { innerNav.navigate(TAB_PROFILE) { launchSingleTop = true } },
-                        icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                        icon = {
+                            BadgedBox(badge = {
+                                if (profileVm.pendingRequests.isNotEmpty()) {
+                                    Badge { Text(profileVm.pendingRequests.size.toString()) }
+                                }
+                            }) {
+                                Icon(Icons.Filled.Person, contentDescription = null)
+                            }
+                        },
                         label = { Text("Profile") }
                     )
                 }
@@ -125,7 +143,7 @@ fun MainScreen(
     ) { innerPadding ->
         NavHost(
             navController = innerNav,
-            startDestination = TAB_NOW_PLAYING,
+            startDestination = TAB_MAP,
             modifier = Modifier.padding(innerPadding)
         ) {
             composable(TAB_NOW_PLAYING) {
@@ -136,12 +154,30 @@ fun MainScreen(
                                 trackRepository,
                                 authRepo,
                                 presenceRepository,
-                                AppContainer.locationProvider
+                                AppContainer.locationProvider,
+                                mapRepository
                             ) as T
                         }
                     }
                 )
-                LastFmScreen(viewModel = vm)
+                LastFmScreen(
+                    viewModel = vm,
+                    unreadCount = conversationsVm.unreadCount,
+                    onGoToChats = { innerNav.navigate(TAB_CHATS) { launchSingleTop = true } },
+                    onPingUser = { user ->
+                        val conversationId = java.util.UUID.randomUUID().toString()
+                        innerNav.navigate(
+                            "chat/$conversationId" +
+                            "?otherUsername=${user.username ?: ""}" +
+                            "&isPersistent=false" +
+                            "&otherUserId=${user.userId}" +
+                            "&myTrack=&myArtist=" +
+                            "&theirTrack=${user.trackName ?: ""}" +
+                            "&theirArtist=${user.artistName ?: ""}" +
+                            "&isPendingPing=true"
+                        )
+                    }
+                )
             }
 
             composable(TAB_MAP) {
@@ -155,35 +191,20 @@ fun MainScreen(
                 MapScreen(
                     viewModel = vm,
                     onPing = { user ->
-                        scope.launch {
-                            try {
-                                val myUser = vm.users.find { it.userId == vm.currentUserId }
-                                val conversationId = socialRepository.sendPing(
-                                    toUserId = user.userId,
-                                    trackTitle = user.trackName,
-                                    trackArtist = user.artistName,
-                                    myTrackTitle = myUser?.trackName,
-                                    myTrackArtist = myUser?.artistName
-                                )
-                                if (conversationId != null) {
-                                    val username = user.username ?: ""
-                                    innerNav.navigate(
-                                        "chat/$conversationId" +
-                                        "?otherUsername=$username" +
-                                        "&isPersistent=false" +
-                                        "&otherUserId=${user.userId}" +
-                                        "&myTrack=${myUser?.trackName ?: ""}" +
-                                        "&myArtist=${myUser?.artistName ?: ""}" +
-                                        "&theirTrack=${user.trackName ?: ""}" +
-                                        "&theirArtist=${user.artistName ?: ""}"
-                                    )
-                                } else {
-                                    Toast.makeText(context, "Could not start chat. Try again.", Toast.LENGTH_SHORT).show()
-                                }
-                            } catch (e: Exception) {
-                                Toast.makeText(context, "No internet connection.", Toast.LENGTH_SHORT).show()
-                            }
-                        }
+                        val conversationId = java.util.UUID.randomUUID().toString()
+                        val myUser = vm.users.find { it.userId == vm.currentUserId }
+                        val username = user.username ?: ""
+                        innerNav.navigate(
+                            "chat/$conversationId" +
+                            "?otherUsername=$username" +
+                            "&isPersistent=false" +
+                            "&otherUserId=${user.userId}" +
+                            "&myTrack=${myUser?.trackName ?: ""}" +
+                            "&myArtist=${myUser?.artistName ?: ""}" +
+                            "&theirTrack=${user.trackName ?: ""}" +
+                            "&theirArtist=${user.artistName ?: ""}" +
+                            "&isPendingPing=true"
+                        )
                     },
                     onGoToConversation = { conversationId, otherUsername, isPersistent, otherUserId ->
                         innerNav.navigate("chat/$conversationId?otherUsername=$otherUsername&isPersistent=$isPersistent&otherUserId=$otherUserId")
@@ -213,20 +234,24 @@ fun MainScreen(
             }
 
             composable(TAB_PROFILE) {
-                val vm: MyProfileViewModel = viewModel(
-                    factory = object : ViewModelProvider.Factory {
-                        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-                            return MyProfileViewModel(authRepo, trackRepository, socialRepository) as T
-                        }
-                    }
-                )
                 MyProfileScreen(
-                    viewModel = vm,
+                    viewModel = profileVm,
                     onEditProfile = onNavToProfile,
                     onSignOut = {
                         scope.launch { authRepo.signOut(); onSignOut() }
                     },
                     onViewFriendProfile = { userId, username ->
+                        innerNav.navigate("user_profile/$userId?username=$username")
+                    },
+                    onGoToFriends = { innerNav.navigate(SCREEN_FRIENDS) }
+                )
+            }
+
+            composable(SCREEN_FRIENDS) {
+                FriendsScreen(
+                    viewModel = profileVm,
+                    onBack = { innerNav.popBackStack() },
+                    onViewProfile = { userId, username ->
                         innerNav.navigate("user_profile/$userId?username=$username")
                     }
                 )
@@ -270,7 +295,8 @@ fun MainScreen(
                     navArgument("myTrack") { type = NavType.StringType; defaultValue = "" },
                     navArgument("myArtist") { type = NavType.StringType; defaultValue = "" },
                     navArgument("theirTrack") { type = NavType.StringType; defaultValue = "" },
-                    navArgument("theirArtist") { type = NavType.StringType; defaultValue = "" }
+                    navArgument("theirArtist") { type = NavType.StringType; defaultValue = "" },
+                    navArgument("isPendingPing") { type = NavType.BoolType; defaultValue = false }
                 )
             ) { backStackEntry ->
                 val args = backStackEntry.arguments
@@ -282,6 +308,7 @@ fun MainScreen(
                 val myArtist = args.getString("myArtist")?.takeIf { it.isNotBlank() }
                 val theirTrack = args.getString("theirTrack")?.takeIf { it.isNotBlank() }
                 val theirArtist = args.getString("theirArtist")?.takeIf { it.isNotBlank() }
+                val isPendingPing = args.getBoolean("isPendingPing")
                 val currentUserId = authRepo.getCurrentUser()?.id ?: ""
 
                 val vm: ChatViewModel = viewModel(
@@ -290,7 +317,8 @@ fun MainScreen(
                         override fun <T : ViewModel> create(modelClass: Class<T>): T {
                             return ChatViewModel(
                                 socialRepository, conversationId, currentUserId, otherUserId,
-                                isPersistent, myTrack, myArtist, theirTrack, theirArtist
+                                isPersistent, myTrack, myArtist, theirTrack, theirArtist,
+                                isPendingPing
                             ) as T
                         }
                     }

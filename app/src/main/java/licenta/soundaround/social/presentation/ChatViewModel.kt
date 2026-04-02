@@ -26,7 +26,8 @@ class ChatViewModel(
     val myInitialTrackTitle: String? = null,
     val myInitialTrackArtist: String? = null,
     val theirInitialTrackTitle: String? = null,
-    val theirInitialTrackArtist: String? = null
+    val theirInitialTrackArtist: String? = null,
+    private val isPendingPing: Boolean = false
 ) : ViewModel() {
 
     var messages by mutableStateOf<List<Message>>(emptyList())
@@ -43,6 +44,9 @@ class ChatViewModel(
         private set
     var otherIsTyping by mutableStateOf(false)
         private set
+
+    // false when this is a new ping that hasn't been persisted to DB yet
+    private var conversationCreated = !isPendingPing
 
     private var typingJob = viewModelScope.launch {}
 
@@ -61,7 +65,7 @@ class ChatViewModel(
 
     init {
         startPolling()
-        if (!initialIsPersistent) fetchAndTickExpiry()
+        if (!initialIsPersistent && !isPendingPing) fetchAndTickExpiry()
     }
 
     private var expiryTickerJob = viewModelScope.launch {}
@@ -99,13 +103,15 @@ class ChatViewModel(
     private fun startPolling() {
         viewModelScope.launch {
             while (true) {
-                try {
-                    messages = repository.loadMessages(conversationId)
-                    otherLastReadAt = repository.getOtherLastReadAt(conversationId)
-                    otherIsTyping = repository.getOtherIsTyping(conversationId)
-                    repository.markRead(conversationId)
-                } catch (e: Exception) {
-                    _toastMessage.tryEmit(e.toUserMessage())
+                if (conversationCreated) {
+                    try {
+                        messages = repository.loadMessages(conversationId)
+                        otherLastReadAt = repository.getOtherLastReadAt(conversationId)
+                        otherIsTyping = repository.getOtherIsTyping(conversationId)
+                        repository.markRead(conversationId)
+                    } catch (e: Exception) {
+                        _toastMessage.tryEmit(e.toUserMessage())
+                    }
                 }
                 delay(3_000L)
             }
@@ -115,6 +121,23 @@ class ChatViewModel(
     fun sendMessage(content: String) {
         viewModelScope.launch {
             isSending = true
+            if (!conversationCreated) {
+                val created = repository.sendPing(
+                    id = conversationId,
+                    toUserId = otherUserId,
+                    trackTitle = theirInitialTrackTitle,
+                    trackArtist = theirInitialTrackArtist,
+                    myTrackTitle = myInitialTrackTitle,
+                    myTrackArtist = myInitialTrackArtist
+                )
+                if (!created) {
+                    _toastMessage.tryEmit("Failed to start conversation. Check your connection.")
+                    isSending = false
+                    return@launch
+                }
+                conversationCreated = true
+                fetchAndTickExpiry()
+            }
             val ok = repository.sendMessage(conversationId, content, isPersistent)
             if (ok) {
                 try {
@@ -173,9 +196,11 @@ class ChatViewModel(
     override fun onCleared() {
         super.onCleared()
         viewModelScope.launch {
-            repository.setTyping(conversationId, false)
-            if (messages.isEmpty() && !isPersistent) {
-                repository.deleteConversation(conversationId)
+            if (conversationCreated) {
+                repository.setTyping(conversationId, false)
+                if (messages.isEmpty() && !isPersistent) {
+                    repository.deleteConversation(conversationId)
+                }
             }
         }
     }

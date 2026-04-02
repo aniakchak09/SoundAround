@@ -38,22 +38,24 @@ class SocialRepository {
     }
 
     suspend fun sendPing(
+        id: String,
         toUserId: String,
         trackTitle: String?,
         trackArtist: String?,
         myTrackTitle: String? = null,
         myTrackArtist: String? = null
-    ): String? {
+    ): Boolean {
         return try {
-            val fromUserId = currentUserId() ?: return null
+            val fromUserId = currentUserId() ?: return false
             val now = isoFormat.format(Date())
             val cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"))
             cal.add(Calendar.HOUR_OF_DAY, 24)
             val expiresAt = isoFormat.format(cal.time)
 
-            val result = client.from("conversations")
+            client.from("conversations")
                 .insert(
                     ConversationInsertDto(
+                        id = id,
                         userOneId = fromUserId,
                         userTwoId = toUserId,
                         isPersistent = false,
@@ -64,13 +66,11 @@ class SocialRepository {
                         myInitialTrackArtist = myTrackArtist,
                         lastMessageAt = now
                     )
-                ) { select() }
-                .decodeSingle<ConversationDto>()
-
-            result.id
+                )
+            true
         } catch (e: Exception) {
             Log.e("SocialRepository", "sendPing failed: ${e.message}")
-            null
+            false
         }
     }
 

@@ -14,6 +14,7 @@ import androidx.navigation.compose.rememberNavController
 import licenta.soundaround.auth.data.AuthRepository
 import licenta.soundaround.auth.presentation.LoginScreen
 import licenta.soundaround.auth.presentation.ManageProfileScreen
+import licenta.soundaround.auth.presentation.OnboardingScreen
 import licenta.soundaround.auth.presentation.SignUpScreen
 import licenta.soundaround.map.data.MapRepository
 import licenta.soundaround.map.data.MatchingRepository
@@ -71,8 +72,18 @@ fun AppNav() {
             composable(Screen.SignUp.route) {
                 SignUpScreen(
                     authRepo = authRepo,
-                    onSignUpSuccess = { navController.navigate(Screen.Main.route) },
+                    onSignUpSuccess = { navController.navigate(Screen.Onboarding.route) },
                     onNavigateToLogin = { navController.popBackStack() }
+                )
+            }
+
+            composable(Screen.Onboarding.route) {
+                OnboardingScreen(
+                    onFinish = {
+                        navController.navigate(Screen.Main.route) {
+                            popUpTo(Screen.Onboarding.route) { inclusive = true }
+                        }
+                    }
                 )
             }
 

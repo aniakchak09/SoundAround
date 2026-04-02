@@ -1,6 +1,9 @@
 package licenta.soundaround.music.presentation
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -17,12 +20,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MusicNote
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -34,10 +41,15 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import licenta.soundaround.map.domain.model.UserLocation
+import licenta.soundaround.music.domain.model.Track
 
 @Composable
 fun LastFmScreen(
-    viewModel: LastFmViewModel
+    viewModel: LastFmViewModel,
+    unreadCount: Int = 0,
+    onGoToChats: () -> Unit = {},
+    onPingUser: (UserLocation) -> Unit = {}
 ) {
 
     Column(
@@ -179,6 +191,22 @@ fun LastFmScreen(
                                 )
                             }
 
+                            val tags = viewModel.currentTrackTags
+                            val repeatCount = viewModel.currentTrackRepeatCount
+                            if (tags.isNotEmpty() || repeatCount > 1) {
+                                Spacer(modifier = Modifier.height(10.dp))
+                                Row(
+                                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                    modifier = Modifier.horizontalScroll(rememberScrollState())
+                                ) {
+                                    tags.forEach { tag ->
+                                        TagChip(tag)
+                                    }
+                                    if (repeatCount > 1) {
+                                        TagChip("×$repeatCount recently", highlight = true)
+                                    }
+                                }
+                            }
                         }
                     }
                 }
@@ -192,6 +220,60 @@ fun LastFmScreen(
                         color = MaterialTheme.colorScheme.error
                     )
                 }
+
+                // Unread messages banner
+                if (unreadCount > 0) {
+                    Spacer(modifier = Modifier.height(20.dp))
+                    Surface(
+                        shape = RoundedCornerShape(12.dp),
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 16.dp)
+                            .then(Modifier.clickable(onClick = onGoToChats))
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Filled.MusicNote,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(Modifier.width(10.dp))
+                            Text(
+                                "$unreadCount unread message${if (unreadCount > 1) "s" else ""} — tap to open chats",
+                                style = MaterialTheme.typography.bodySmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+                }
+
+                // Who's Nearby
+                if (viewModel.nearbyUsers.isNotEmpty()) {
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Text(
+                        "Who's Nearby",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                        viewModel.nearbyUsers.forEachIndexed { index, user ->
+                            NearbyUserRow(user = user, onPing = { onPingUser(user) })
+                            if (index < viewModel.nearbyUsers.lastIndex) {
+                                HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
             }
 
             else -> {
@@ -206,6 +288,76 @@ fun LastFmScreen(
             }
         }
 
-        Spacer(modifier = Modifier.weight(1f))
+        if (viewModel.trackInfo == null) {
+            Spacer(modifier = Modifier.weight(1f))
+        }
     }
 }
+
+@Composable
+private fun TagChip(label: String, highlight: Boolean = false) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = if (highlight) MaterialTheme.colorScheme.primaryContainer
+                else MaterialTheme.colorScheme.surfaceVariant,
+        tonalElevation = 1.dp
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = if (highlight) FontWeight.Bold else FontWeight.Normal,
+            color = if (highlight) MaterialTheme.colorScheme.onPrimaryContainer
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+        )
+    }
+}
+
+@Composable
+private fun NearbyUserRow(user: UserLocation, onPing: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(38.dp)
+                .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                user.username?.firstOrNull()?.uppercaseChar()?.toString() ?: "?",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+        Spacer(Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "@${user.username ?: user.userId}",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            if (user.trackName != null) {
+                Text(
+                    "${if (user.isPlaying) "▶ " else ""}${user.trackName}",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+        }
+        TextButton(onClick = onPing) {
+            Icon(Icons.Filled.Send, contentDescription = null, modifier = Modifier.size(14.dp))
+            Spacer(Modifier.width(4.dp))
+            Text("Ping", style = MaterialTheme.typography.labelMedium)
+        }
+    }
+}
+

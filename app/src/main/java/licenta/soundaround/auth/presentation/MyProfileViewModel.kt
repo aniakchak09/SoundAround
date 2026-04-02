@@ -49,6 +49,8 @@ class MyProfileViewModel(
         private set
     var friendRequestsSent by mutableStateOf<Set<String>>(emptySet())
         private set
+    var pendingRequests by mutableStateOf<List<licenta.soundaround.social.domain.model.FriendRequest>>(emptyList())
+        private set
 
     init {
         load()
@@ -83,6 +85,23 @@ class MyProfileViewModel(
         }
     }
 
+    fun acceptRequest(fromUserId: String) {
+        viewModelScope.launch {
+            if (socialRepository.acceptFriendRequest(fromUserId)) {
+                pendingRequests = pendingRequests.filter { it.fromUserId != fromUserId }
+                friends = socialRepository.getFriends()
+            }
+        }
+    }
+
+    fun declineRequest(fromUserId: String) {
+        viewModelScope.launch {
+            if (socialRepository.declineFriendRequest(fromUserId)) {
+                pendingRequests = pendingRequests.filter { it.fromUserId != fromUserId }
+            }
+        }
+    }
+
     fun load() {
         viewModelScope.launch {
             isLoading = true
@@ -93,8 +112,9 @@ class MyProfileViewModel(
             val user = authRepo.getCurrentUser()
             joinDate = user?.createdAt?.toString()
 
-            // Load friends
+            // Load friends and pending requests
             launch { friends = socialRepository.getFriends() }
+            launch { pendingRequests = socialRepository.getPendingRequests() }
 
             val lastFm = p?.lastFmUsername?.takeIf { it.isNotBlank() }
             if (!lastFm.isNullOrBlank()) {
