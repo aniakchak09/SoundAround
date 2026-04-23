@@ -22,8 +22,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Send
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExtendedFloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -56,7 +58,8 @@ import licenta.soundaround.music.domain.model.Track
 @Composable
 fun UserProfileScreen(
     viewModel: UserProfileViewModel,
-    onBack: () -> Unit
+    onBack: () -> Unit,
+    onStartChat: (() -> Unit)? = null
 ) {
     var showAvatarDialog by remember { mutableStateOf(false) }
 
@@ -90,6 +93,15 @@ fun UserProfileScreen(
                     }
                 }
             )
+        },
+        floatingActionButton = {
+            if (onStartChat != null) {
+                ExtendedFloatingActionButton(
+                    onClick = onStartChat,
+                    icon = { Icon(Icons.Filled.Send, contentDescription = null) },
+                    text = { Text("Ping") }
+                )
+            }
         }
     ) { padding ->
         if (viewModel.isLoading) {
@@ -176,11 +188,14 @@ fun UserProfileScreen(
                 }
             }
 
-            // No last.fm linked
+            // No last.fm linked or hidden
             if (viewModel.lastFmUsername.isNullOrBlank()) {
                 item {
                     Text(
-                        "This user hasn't linked a last.fm account.",
+                        if (viewModel.statsHidden)
+                            "This user's music stats are private."
+                        else
+                            "This user hasn't linked a last.fm account.",
                         style = MaterialTheme.typography.bodyMedium,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

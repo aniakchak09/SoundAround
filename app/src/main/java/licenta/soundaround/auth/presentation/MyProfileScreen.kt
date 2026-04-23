@@ -8,12 +8,17 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Group
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -150,11 +155,19 @@ fun MyProfileScreen(
 
         // Friends card — right after header
         item {
+            val friendsInteraction = remember { MutableInteractionSource() }
+            val friendsPressed by friendsInteraction.collectIsPressedAsState()
+            val friendsScale by animateFloatAsState(
+                targetValue = if (friendsPressed) 0.97f else 1f,
+                animationSpec = tween(durationMillis = 80),
+                label = "friendsScale"
+            )
             Card(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = 16.dp)
-                    .clickable { onGoToFriends() },
+                    .graphicsLayer { scaleX = friendsScale; scaleY = friendsScale }
+                    .clickable(interactionSource = friendsInteraction, indication = null) { onGoToFriends() },
                 shape = RoundedCornerShape(16.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer)
             ) {

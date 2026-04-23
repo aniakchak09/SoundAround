@@ -8,6 +8,14 @@ private val utcFormat = SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss'Z'", Locale.US).
     timeZone = TimeZone.getTimeZone("UTC")
 }
 
+fun minutesSinceLastSeen(utcTimestamp: String?): Long? {
+    if (utcTimestamp == null) return null
+    return try {
+        val time = utcFormat.parse(utcTimestamp)?.time ?: return null
+        (System.currentTimeMillis() - time) / 60_000
+    } catch (_: Exception) { null }
+}
+
 fun formatRelativeTime(utcTimestamp: String): String {
     return try {
         val time = utcFormat.parse(utcTimestamp)?.time ?: return ""

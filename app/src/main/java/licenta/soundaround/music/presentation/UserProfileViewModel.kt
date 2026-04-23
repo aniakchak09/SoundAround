@@ -39,6 +39,8 @@ class UserProfileViewModel(
         private set
     var trackImages by mutableStateOf<Map<String, String>>(emptyMap())
         private set
+    var statsHidden by mutableStateOf(false)
+        private set
     var isLoading by mutableStateOf(true)
         private set
 
@@ -54,6 +56,7 @@ class UserProfileViewModel(
             lastFmUsername = info.lastFmUsername
             avatarUrl = info.avatarUrl
             lastSeenAt = info.lastSeenAt
+            statsHidden = info.statsHidden
 
             val lfm = info.lastFmUsername
             if (!lfm.isNullOrBlank()) {

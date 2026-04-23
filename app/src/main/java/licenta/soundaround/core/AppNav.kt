@@ -2,6 +2,9 @@ package licenta.soundaround.core
 
 import android.content.Context
 import android.util.Log
+import okhttp3.Cache
+import okhttp3.OkHttpClient
+import java.io.File
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -27,15 +30,24 @@ import licenta.soundaround.social.data.SocialRepository
 object AppContainer {
     lateinit var locationProvider: LocationProvider
         private set
+    lateinit var okHttpClient: OkHttpClient
+        private set
 
     fun init(context: Context) {
         locationProvider = LocationProvider(context)
+        val cacheDir = File(context.cacheDir, "http_api_cache")
+        okHttpClient = OkHttpClient.Builder()
+            .cache(Cache(cacheDir, 10L * 1024 * 1024)) // 10 MB disk cache
+            .build()
     }
 
     val authRepository: AuthRepository by lazy { AuthRepository() }
 
     val trackRepository: MusicRepositoryImpl by lazy {
-        MusicRepositoryImpl(RetrofitClient.lastFmService, RetrofitItunesClient.itunesService)
+        MusicRepositoryImpl(
+            RetrofitClient.createService(okHttpClient),
+            RetrofitItunesClient.createService(okHttpClient)
+        )
     }
 
     val presenceRepository: PresenceRepository by lazy { PresenceRepository() }
@@ -44,7 +56,7 @@ object AppContainer {
 
     val socialRepository: SocialRepository by lazy { SocialRepository() }
 
-    val matchingRepository: MatchingRepository by lazy { MatchingRepository(trackRepository) }
+    val matchingRepository: MatchingRepository by lazy { MatchingRepository(okHttpClient) }
 }
 
 @Composable
@@ -78,12 +90,14 @@ fun AppNav() {
             }
 
             composable(Screen.Onboarding.route) {
-                OnboardingScreen(
-                    onFinish = {
-                        navController.navigate(Screen.Main.route) {
-                            popUpTo(Screen.Onboarding.route) { inclusive = true }
-                        }
+                val finish = {
+                    navController.navigate(Screen.Main.route) {
+                        popUpTo(Screen.Onboarding.route) { inclusive = true }
                     }
+                }
+                OnboardingScreen(
+                    onFinish = finish,
+                    onSaveLastFm = { username -> authRepo.updateLastFm(username) }
                 )
             }
 

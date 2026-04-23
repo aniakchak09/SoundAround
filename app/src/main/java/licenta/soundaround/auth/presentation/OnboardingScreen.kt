@@ -23,14 +23,18 @@ import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Map
 import androidx.compose.material.icons.filled.MusicNote
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -38,6 +42,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import kotlinx.coroutines.launch
 
 private data class OnboardingPage(
     val icon: ImageVector,
@@ -69,8 +74,87 @@ private val pages = listOf(
 )
 
 @Composable
-fun OnboardingScreen(onFinish: () -> Unit) {
+fun OnboardingScreen(
+    onFinish: () -> Unit,
+    onSaveLastFm: (suspend (String) -> String?)? = null
+) {
     var currentPage by remember { mutableIntStateOf(0) }
+    var showLastFmSetup by remember { mutableStateOf(false) }
+    var lastFmInput by remember { mutableStateOf("") }
+    var lastFmError by remember { mutableStateOf<String?>(null) }
+    var isSaving by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+
+    if (showLastFmSetup && onSaveLastFm != null) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 32.dp, vertical = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(96.dp)
+                    .background(MaterialTheme.colorScheme.primaryContainer, CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = Icons.Filled.MusicNote,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+            Spacer(Modifier.height(32.dp))
+            Text(
+                "Link your last.fm",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(12.dp))
+            Text(
+                "SoundAround works best with a last.fm account. Enter your username so others can see what you're listening to.",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
+            Spacer(Modifier.height(24.dp))
+            OutlinedTextField(
+                value = lastFmInput,
+                onValueChange = { lastFmInput = it; lastFmError = null },
+                label = { Text("last.fm username") },
+                singleLine = true,
+                isError = lastFmError != null,
+                supportingText = lastFmError?.let { { Text(it) } },
+                modifier = Modifier.fillMaxWidth()
+            )
+            Spacer(Modifier.height(24.dp))
+            Button(
+                onClick = {
+                    if (lastFmInput.isBlank()) { lastFmError = "Enter a username"; return@Button }
+                    scope.launch {
+                        isSaving = true
+                        val error = onSaveLastFm(lastFmInput.trim())
+                        if (error == null) onFinish() else { lastFmError = error; isSaving = false }
+                    }
+                },
+                enabled = !isSaving,
+                shape = RoundedCornerShape(50),
+                modifier = Modifier.fillMaxWidth().height(52.dp)
+            ) {
+                if (isSaving) CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                else Text("Link Account", style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.SemiBold)
+            }
+            Spacer(Modifier.height(12.dp))
+            TextButton(onClick = onFinish) {
+                Text("Skip for now", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
+        return
+    }
+
     val page = pages[currentPage]
     val isLast = currentPage == pages.lastIndex
 
@@ -160,8 +244,11 @@ fun OnboardingScreen(onFinish: () -> Unit) {
 
         Button(
             onClick = {
-                if (isLast) onFinish()
-                else currentPage++
+                when {
+                    !isLast -> currentPage++
+                    onSaveLastFm != null -> showLastFmSetup = true
+                    else -> onFinish()
+                }
             },
             shape = RoundedCornerShape(50),
             modifier = Modifier

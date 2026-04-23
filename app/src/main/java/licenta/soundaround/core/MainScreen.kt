@@ -282,7 +282,19 @@ fun MainScreen(
                         }
                     }
                 )
-                UserProfileScreen(viewModel = vm, onBack = { innerNav.popBackStack() })
+                val currentUserId = authRepo.getCurrentUser()?.id ?: ""
+                UserProfileScreen(
+                    viewModel = vm,
+                    onBack = { innerNav.popBackStack() },
+                    onStartChat = if (userId != currentUserId) {
+                        {
+                            val conversationId = java.util.UUID.randomUUID().toString()
+                            innerNav.navigate(
+                                "chat/$conversationId?otherUsername=$username&isPersistent=false&otherUserId=$userId&myTrack=&myArtist=&theirTrack=&theirArtist=&isPendingPing=true"
+                            )
+                        }
+                    } else null
+                )
             }
 
             composable(

@@ -7,8 +7,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -111,8 +109,12 @@ class MapViewModel(
         while (true) {
             delay(30_000L)
             try {
-                users = repository.getActiveUsers()
-                matchingRepository.clearUserCache()
+                val newUsers = repository.getActiveUsers()
+                val activeIds = newUsers.map { it.userId }.toSet()
+                val myUsername = myLastFmUsername
+                if (myUsername != null) matchingRepository.evictUsersNotIn(myUsername, activeIds)
+                compatibilityScores = compatibilityScores.filterKeys { it in activeIds }
+                users = newUsers
                 computeCompatibilityScores()
             } catch (e: Exception) {
                 _toastMessage.tryEmit(e.toUserMessage())
@@ -123,8 +125,9 @@ class MapViewModel(
     fun refresh() {
         viewModelScope.launch {
             try {
-                users = repository.getActiveUsers()
+                users = repository.getActiveUsers(forceRefresh = true)
                 matchingRepository.clearUserCache()
+                compatibilityScores = emptyMap()
                 computeCompatibilityScores()
             } catch (e: Exception) {
                 _toastMessage.tryEmit(e.toUserMessage())
@@ -144,18 +147,9 @@ class MapViewModel(
 
         viewModelScope.launch {
             isComputingScores = true
-            val scores = usersWithLastFm
-                .map { user ->
-                    async {
-                        val score = try {
-                            matchingRepository.getCompatibilityScore(myUsername, user.lastFmUsername!!)
-                        } catch (_: Exception) { 0f }
-                        user.userId to score
-                    }
-                }
-                .awaitAll()
-                .toMap()
-            compatibilityScores = scores
+            try {
+                compatibilityScores = matchingRepository.computeScores(myUsername, usersWithLastFm)
+            } catch (_: Exception) {}
             isComputingScores = false
         }
     }

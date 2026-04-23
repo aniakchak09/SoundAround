@@ -34,7 +34,8 @@ data class UserProfileInfo(
     val bio: String?,
     val lastFmUsername: String?,
     val avatarUrl: String?,
-    val lastSeenAt: String?
+    val lastSeenAt: String?,
+    val statsHidden: Boolean = false
 )
 
 @Serializable
@@ -46,7 +47,24 @@ private data class FriendIdDto(
 class MapRepository {
     private val client = SupabaseConfig.client
 
-    suspend fun getActiveUsers(): List<UserLocation> {
+    private var activeUsersCache: List<UserLocation> = emptyList()
+    private var activeUsersCacheTime: Long = 0L
+
+    private var friendIdsCache: Set<String> = emptySet()
+    private var friendIdsCacheTime: Long = 0L
+
+    suspend fun getActiveUsers(forceRefresh: Boolean = false): List<UserLocation> {
+        val now = System.currentTimeMillis()
+        if (!forceRefresh && activeUsersCache.isNotEmpty() && now - activeUsersCacheTime < 60_000L) {
+            return activeUsersCache
+        }
+        return fetchActiveUsers().also {
+            activeUsersCache = it
+            activeUsersCacheTime = System.currentTimeMillis()
+        }
+    }
+
+    private suspend fun fetchActiveUsers(): List<UserLocation> {
         val currentUserId = client.auth.currentUserOrNull()?.id
 
         val rawLocations = client.from("locations")
@@ -99,6 +117,9 @@ class MapRepository {
     }
 
     private suspend fun getFriendIds(userId: String): Set<String> {
+        val now = System.currentTimeMillis()
+        if (now - friendIdsCacheTime < 120_000L) return friendIdsCache
+
         return try {
             val asSender = client.from("friendships")
                 .select(Columns.raw("user_id,friend_id")) {
@@ -117,6 +138,9 @@ class MapRepository {
             (asSender + asReceiver).toSet()
         } catch (e: Exception) {
             emptySet()
+        }.also {
+            friendIdsCache = it
+            friendIdsCacheTime = System.currentTimeMillis()
         }
     }
 
@@ -146,12 +170,14 @@ class MapRepository {
                     else currentUserId == userId || getFriendIds(currentUserId).contains(userId)
                 }
             }
+            val hasLastFm = dto?.lastFmUsername?.isNotBlank() == true
 
             UserProfileInfo(
                 bio = dto?.bio?.takeIf { it.isNotBlank() },
                 lastFmUsername = dto?.lastFmUsername?.takeIf { it.isNotBlank() && showLastFm },
                 avatarUrl = dto?.avatarUrl?.takeIf { it.isNotBlank() },
-                lastSeenAt = lastSeenAt
+                lastSeenAt = lastSeenAt,
+                statsHidden = hasLastFm && !showLastFm
             )
         } catch (e: Exception) {
             UserProfileInfo(null, null, null, null)

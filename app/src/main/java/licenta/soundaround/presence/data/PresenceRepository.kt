@@ -34,18 +34,27 @@ class PresenceRepository {
             ) {
                 onConflict = "user_id"
             }
-            // Only update last_seen_at when GPS is available — never overwrite it with null
-            if (lat != null && lng != null) {
-                client.from("locations")
-                    .update({ set("last_seen_at", now) }) {
-                        filter { eq("user_id", userId) }
-                    }
-            }
+            // Always stamp last_seen_at when active — GPS availability doesn't matter here
+            client.from("locations")
+                .update({ set("last_seen_at", now) }) {
+                    filter { eq("user_id", userId) }
+                }
             Log.d("PresenceRepository", "Published: ${track.title} by ${track.artist} @ $lat,$lng")
             true
         } catch (e: Exception) {
             Log.e("PresenceRepository", "Publish failed: ${e.message}")
             false
         }
+    }
+
+    suspend fun touchLastSeen() {
+        try {
+            val userId = client.auth.currentUserOrNull()?.id ?: return
+            val now = isoFormat.format(Date())
+            client.from("locations")
+                .update({ set("last_seen_at", now) }) {
+                    filter { eq("user_id", userId) }
+                }
+        } catch (_: Exception) {}
     }
 }

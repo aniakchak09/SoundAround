@@ -8,6 +8,8 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Scaffold
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.lifecycleScope
+import kotlinx.coroutines.launch
 import licenta.soundaround.core.AppContainer
 import licenta.soundaround.core.AppNav
 import licenta.soundaround.core.SupabaseConfig
@@ -29,6 +31,13 @@ class MainActivity : ComponentActivity() {
                     AppNav()
                 }
             }
+        }
+    }
+
+    override fun onStop() {
+        super.onStop()
+        lifecycleScope.launch {
+            AppContainer.presenceRepository.touchLastSeen()
         }
     }
 }
