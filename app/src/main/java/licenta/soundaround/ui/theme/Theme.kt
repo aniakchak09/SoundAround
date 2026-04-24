@@ -1,57 +1,41 @@
 package licenta.soundaround.ui.theme
 
-import android.app.Activity
-import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.dynamicDarkColorScheme
-import androidx.compose.material3.dynamicLightColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.graphics.Color
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Purple80,
-    secondary = PurpleGrey80,
-    tertiary = Pink80
-)
-
-private val LightColorScheme = lightColorScheme(
-    primary = Purple40,
-    secondary = PurpleGrey40,
-    tertiary = Pink40
-
-    /* Other default colors to override
-    background = Color(0xFFFFFBFE),
-    surface = Color(0xFFFFFBFE),
-    onPrimary = Color.White,
-    onSecondary = Color.White,
-    onTertiary = Color.White,
-    onBackground = Color(0xFF1C1B1F),
-    onSurface = Color(0xFF1C1B1F),
-    */
+private val AppDarkColorScheme = darkColorScheme(
+    primary = NeonPurple,
+    onPrimary = NeonPurpleOnDark,
+    primaryContainer = NeonPurpleDim,
+    onPrimaryContainer = Color(0xFFEADDFF),
+    secondary = Teal,
+    onSecondary = TealDim,
+    secondaryContainer = Color(0xFF004D3A),
+    onSecondaryContainer = Color(0xFFB3F5E6),
+    tertiary = HotPink,
+    onTertiary = HotPinkDim,
+    tertiaryContainer = Color(0xFF5C1040),
+    onTertiaryContainer = Color(0xFFFFD8EC),
+    background = DarkBg,
+    onBackground = LightOnDark,
+    surface = DarkSurface,
+    onSurface = LightOnDark,
+    surfaceVariant = DarkSurfaceVariant,
+    onSurfaceVariant = SubtleOnDark,
+    outline = OutlineDark,
+    outlineVariant = Color(0xFF3A3550),
+    scrim = Color(0xFF000000),
+    inverseSurface = Color(0xFFE6E1E5),
+    inverseOnSurface = Color(0xFF1C1B1F),
+    inversePrimary = Purple40,
 )
 
 @Composable
-fun SoundAroundTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
-    // Dynamic color is available on Android 12+
-    dynamicColor: Boolean = true,
-    content: @Composable () -> Unit
-) {
-    val colorScheme = when {
-        dynamicColor && Build.VERSION.SDK_INT >= Build.VERSION_CODES.S -> {
-            val context = LocalContext.current
-            if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
-        }
-
-        darkTheme -> DarkColorScheme
-        else -> LightColorScheme
-    }
-
+fun SoundAroundTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = AppDarkColorScheme,
         typography = Typography,
         content = content
     )

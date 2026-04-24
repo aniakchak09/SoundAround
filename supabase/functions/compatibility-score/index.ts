@@ -25,8 +25,8 @@ async function getTopTracks(username: string): Promise<{ name: string; artist: {
   return data?.toptracks?.track ?? [];
 }
 
-async function getUserTopTags(username: string): Promise<{ name: string; count: string }[]> {
-  const url = `${LASTFM_API}?method=user.gettopartags&user=${encodeURIComponent(username)}&api_key=${API_KEY}&format=json&limit=50`;
+async function getArtistTags(artist: string): Promise<{ name: string; count: number }[]> {
+  const url = `${LASTFM_API}?method=artist.gettoptags&artist=${encodeURIComponent(artist)}&api_key=${API_KEY}&format=json`;
   const res = await fetch(url);
   if (!res.ok) return [];
   const data = await res.json();
@@ -34,27 +34,33 @@ async function getUserTopTags(username: string): Promise<{ name: string; count: 
 }
 
 async function buildProfile(username: string): Promise<UserMusicProfile | null> {
-  const [artists, tracks, tags] = await Promise.all([
+  const [artists, tracks] = await Promise.all([
     getTopArtists(username),
     getTopTracks(username),
-    getUserTopTags(username),
   ]);
 
   if (artists.length === 0) return null;
 
   const artistVector: Record<string, number> = {};
   for (const a of artists) {
-    artistVector[a.name.toLowerCase()] = parseFloat(a.playcount) || 0;
+    artistVector[a.name.toLowerCase()] = Math.log1p(parseFloat(a.playcount) || 0);
   }
 
   const trackVector: Record<string, number> = {};
   for (const t of tracks) {
-    trackVector[`${t.name.toLowerCase()}_${t.artist.name.toLowerCase()}`] = parseFloat(t.playcount) || 0;
+    trackVector[`${t.name.toLowerCase()}_${t.artist.name.toLowerCase()}`] = Math.log1p(parseFloat(t.playcount) || 0);
   }
 
+  // Genre: aggregate community tags from top 10 artists, weighted by log-playcount
+  const top10 = artists.slice(0, 10);
+  const tagsResults = await Promise.all(top10.map((a) => getArtistTags(a.name)));
   const genreVector: Record<string, number> = {};
-  for (const tag of tags) {
-    genreVector[tag.name.toLowerCase()] = parseFloat(tag.count) || 0;
+  for (let i = 0; i < top10.length; i++) {
+    const weight = Math.log1p(parseFloat(top10[i].playcount) || 0);
+    for (const tag of tagsResults[i].slice(0, 5)) {
+      const key = tag.name.toLowerCase();
+      genreVector[key] = (genreVector[key] ?? 0) + weight * (tag.count / 100);
+    }
   }
 
   return { artistVector, trackVector, genreVector };
@@ -75,7 +81,10 @@ function computeScore(mine: UserMusicProfile, theirs: UserMusicProfile): number 
   const artistScore = cosineSimilarity(mine.artistVector, theirs.artistVector);
   const trackScore = cosineSimilarity(mine.trackVector, theirs.trackVector);
   const genreScore = cosineSimilarity(mine.genreVector, theirs.genreVector);
-  return 0.40 * artistScore + 0.35 * trackScore + 0.25 * genreScore;
+  const raw = 0.45 * artistScore + 0.10 * trackScore + 0.45 * genreScore;
+  // Cosine on sparse vectors naturally caps around 0.2-0.4 even for similar users.
+  // Power curve maps that range to something more intuitive without changing ordering.
+  return Math.pow(raw, 0.6);
 }
 
 Deno.serve(async (req) => {
