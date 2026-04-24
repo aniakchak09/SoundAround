@@ -2,6 +2,7 @@ package licenta.soundaround.map.presentation
 
 import android.media.MediaPlayer
 import android.util.Log
+import kotlin.math.*
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -142,15 +143,32 @@ class MapViewModel(
 
     private fun computeCompatibilityScores() {
         val myUsername = myLastFmUsername ?: return
-        val usersWithLastFm = users.filter { !it.lastFmUsername.isNullOrBlank() }
-        if (usersWithLastFm.isEmpty()) return
+        val origin = ownLocation
+        val candidates = users.filter { !it.lastFmUsername.isNullOrBlank() }.let { all ->
+            if (origin == null) all
+            else all.filter { haversineKm(origin.first, origin.second, it.lat, it.lng) <= SCORE_RADIUS_KM }
+        }
+        if (candidates.isEmpty()) return
 
         viewModelScope.launch {
             isComputingScores = true
             try {
-                compatibilityScores = matchingRepository.computeScores(myUsername, usersWithLastFm)
+                compatibilityScores = matchingRepository.computeScores(myUsername, candidates)
             } catch (_: Exception) {}
             isComputingScores = false
+        }
+    }
+
+    companion object {
+        private const val SCORE_RADIUS_KM = 5.0
+
+        private fun haversineKm(lat1: Double, lng1: Double, lat2: Double, lng2: Double): Double {
+            val r = 6371.0
+            val dLat = Math.toRadians(lat2 - lat1)
+            val dLng = Math.toRadians(lng2 - lng1)
+            val a = sin(dLat / 2).pow(2) +
+                    cos(Math.toRadians(lat1)) * cos(Math.toRadians(lat2)) * sin(dLng / 2).pow(2)
+            return r * 2 * atan2(sqrt(a), sqrt(1 - a))
         }
     }
 
