@@ -59,7 +59,8 @@ import licenta.soundaround.music.domain.model.Track
 fun UserProfileScreen(
     viewModel: UserProfileViewModel,
     onBack: () -> Unit,
-    onStartChat: (() -> Unit)? = null
+    onStartChat: (() -> Unit)? = null,
+    isFriend: Boolean = false
 ) {
     var showAvatarDialog by remember { mutableStateOf(false) }
 
@@ -99,7 +100,7 @@ fun UserProfileScreen(
                 ExtendedFloatingActionButton(
                     onClick = onStartChat,
                     icon = { Icon(Icons.Filled.Send, contentDescription = null) },
-                    text = { Text("Ping") }
+                    text = { Text(if (isFriend) "Message" else "Ping") }
                 )
             }
         }

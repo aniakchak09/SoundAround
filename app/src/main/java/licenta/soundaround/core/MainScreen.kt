@@ -367,15 +367,39 @@ fun MainScreen(
                         }
                     )
                     val currentUserId = authRepo.getCurrentUser()?.id ?: ""
+                    val isFriend = profileVm.friends.any { it.first == userId }
                     UserProfileScreen(
                         viewModel = vm,
                         onBack = { innerNav.popBackStack() },
+                        isFriend = isFriend,
                         onStartChat = if (userId != currentUserId) {
                             {
-                                val conversationId = java.util.UUID.randomUUID().toString()
-                                innerNav.navigate(
-                                    "chat/$conversationId?otherUsername=$username&isPersistent=false&otherUserId=$userId&myTrack=&myArtist=&theirTrack=&theirArtist=&isPendingPing=true"
-                                )
+                                if (isFriend) {
+                                    val existing = conversationsVm.conversations
+                                        .find { it.otherUserId == userId && it.isPersistent }
+                                    if (existing != null) {
+                                        innerNav.navigate(
+                                            "chat/${existing.id}" +
+                                            "?otherUsername=${existing.otherUsername}" +
+                                            "&isPersistent=true" +
+                                            "&otherUserId=${existing.otherUserId}" +
+                                            "&myTrack=${existing.myInitialTrackTitle ?: ""}" +
+                                            "&myArtist=${existing.myInitialTrackArtist ?: ""}" +
+                                            "&theirTrack=${existing.theirInitialTrackTitle ?: ""}" +
+                                            "&theirArtist=${existing.theirInitialTrackArtist ?: ""}"
+                                        )
+                                    } else {
+                                        val conversationId = java.util.UUID.randomUUID().toString()
+                                        innerNav.navigate(
+                                            "chat/$conversationId?otherUsername=$username&isPersistent=true&otherUserId=$userId&myTrack=&myArtist=&theirTrack=&theirArtist=&isPendingPing=false"
+                                        )
+                                    }
+                                } else {
+                                    val conversationId = java.util.UUID.randomUUID().toString()
+                                    innerNav.navigate(
+                                        "chat/$conversationId?otherUsername=$username&isPersistent=false&otherUserId=$userId&myTrack=&myArtist=&theirTrack=&theirArtist=&isPendingPing=true"
+                                    )
+                                }
                             }
                         } else null
                     )
